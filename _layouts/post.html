@@ -19,8 +19,36 @@ layout: default
           TeX: {
             Macros: {
               llbrace: "\\{\\!\\!\\{",
-              rrbrace: "\\}\\!\\!\\}"
-            }
+              rrbrace: "\\}\\!\\!\\}",
+              tsvar: ["{\\textcolor{RedOrange}{\\mathtt{#1}}}", 1],
+              rvar: ["{\\textcolor{TealBlue}{\\mathtt{#1}}}", 1],
+              tvar: ["{\\textcolor{RubineRed}{\\mathtt{#1}}}", 1],
+              pvar: ["{\\mathtt{#1}}", 1],
+              var: ["{\\mathtt{#1}}", 1],
+              typed: ["{(#1 : #2)}", 2],
+              tag: ["{\\textcolor{NavyBlue}{\\mathtt{#1}}}", 1],
+              typedef: ["{\\mathbf{type} \\ #1 = #2 \\ \\mathbf{in} \\ }", 2],
+              variantType: ["{\\langle #1 \\rangle}", 1],
+              funType: ["#1 \\to #2", 2],
+              recVariantType: ["{#1 \\textbf{ as } \\variantType{#2}}", 2],
+              extendRow: ["{\\tag{#1}: #2 \\text{ , } #3}", 3],
+              emptyRow: "\\#",
+              polyType: ["\\forall(#1).#2", 2],
+              polyRow: ["\\forall(#1).#2", 2],
+              polyTypeRow: ["\\forall(#1).\\forall(#2).#3", 3],
+              instType: ["{#1 \[#2\]}", 2],
+              instRow: ["{#1 \[#2\]}", 2],
+              instTypeRow: ["{#1 \[#2\]\[#3\]}", 3],
+              let: ["{\\mathbf{let} \\ #1 : #2 = #3 \\ \\mathbf{in} \\ }", 3],
+              letBreak: ["{\\mathbf{let} \\ #1 : #2 =\\\\\\quad\\ #3 \\ \\mathbf{in} \\ }", 3],
+              letBlock: ["{\\mathbf{let} \\ #1 : #2 =\\\\\\quad\\ #3\\\\\\mathbf{in} \\ }", 3],
+              app: ["{#1 \\ #2}", 2],
+              papp: ["{#1 \\cdot #2}", 2],
+              match: ["{\\mathbf{match} \\ #1 \\ \\mathbf{with} \\ \\langle #2 \\rangle}", 2],
+              matchBlock: ["{\\mathbf{match} \\ #1 \\ \\mathbf{with} \\ \\langle\\\\ #2 \\\\\\rangle}", 2],
+              case: ["{#1 \\Rightarrow #2}", 2]
+            },
+            extensions: ["color.js","AMSmath.js", "AMSsymbols.js"]
           },
           tex2jax: {inlineMath: [['{$','$}'], ['\\(','\\)']]}
         });
