@@ -19,6 +19,7 @@ description: >- # this means to ignore newlines until "baseurl:"
   A language for describing program transformations
 baseurl: "/doc" # the subpath of your site, e.g. /blog
 url: "" # the base hostname & protocol for your site, e.g. http://example.com
+header_pages: "about.md"
 github_username: elevate-lang
 
 # Build settings

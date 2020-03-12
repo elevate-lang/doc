@@ -1,10 +1,8 @@
 name:                mini-elevate-parser
 version:             0.1.0.0
-github:              "githubuser/mini-elevate-parser"
-license:             BSD3
-author:              "Author name here"
-maintainer:          "example@example.com"
-copyright:           "2020 Author name here"
+license:             MIT
+author:              "The ELEVATE Team"
+copyright:           "2020 The ELEVATE Team"
 
 extra-source-files:
 - README.md
@@ -24,7 +22,6 @@ dependencies:
 - parsec
 - containers
 - raw-strings-qq
-- recursion-schemes
 
 library:
   source-dirs: src

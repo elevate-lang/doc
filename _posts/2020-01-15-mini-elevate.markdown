@@ -5,7 +5,7 @@ date:   2020-01-24 12:30:00 +0000
 ---
 
 <details>
-<summary>{$\begin{equation*} \begin{split} \tau \mathrel{\mathop:}= \ &\alpha \cmid \tau_1 \to \tau_2 \cmid \{ \rho \} \cmid \langle \rho \rangle \cmid \alpha \textbf{ as } \langle \rho \rangle \cmid \sigma \overline{\ \tau_i}_{0 \leq i \leq m} \ \overline{[\rho_i]}_{0 \leq i \leq n}\end{split} \end{equation*}$}<span style="float:right;">Types</span></summary>
+<summary>{$\begin{equation*} \begin{split} \tau \mathrel{\mathop:}= \ &\alpha \cmid \tau_1 \to \tau_2 \cmid \{ \rho \} \cmid \langle \rho \rangle \cmid \alpha \textbf{ as } \langle \rho \rangle \cmid \sigma \many{\ \tau_i}{}{i}{0}{m} \ \many{[\rho_i]}{}{i}{0}{n}\end{split} \end{equation*}$}<span style="float:right;">Types</span></summary>
 <ul>
 <li class="item-description"><span>{$\alpha$}</span><span>Type variable</span></li>
 <li class="item-description"><span>{$\tau_1 \to \tau_2$}</span><span>Function type</span></li>
@@ -26,14 +26,14 @@ date:   2020-01-24 12:30:00 +0000
 </details>
 
 <details>
-<summary>{$\kappa \mathrel{\mathop:}=\optional{\neg}\{\overline{l_i}^,_{0 \leq i \leq n}\}$}<span style="float:right;">Lacks</span></summary>
+<summary>{$\kappa \mathrel{\mathop:}=\optional{\neg}\{\many{l_i}{,}{i}{0}{n}\}$}<span style="float:right;">Lacks</span></summary>
 <ul>
 <li class="item-description"><span>{$\{ l_1, \dots, l_n \}$}</span><span>A set of labels that a row-type variable must not contain</span></li>
 </ul>
 </details>
 
 <details>
-<summary>{$\sigma \mathrel{\mathop:}= \Sigma \cmid \optional{\forall \ \overline{\alpha_i}_{0 \leq i \leq m} \ \overline{[\beta_i : \kappa_i]}_{0 \leq i \leq n}.}\tau$}<span style="float:right;">Type Schemes</span></summary>
+<summary>{$\sigma \mathrel{\mathop:}= \Sigma \cmid \optional{\forall \ \many{\alpha_i}{}{i}{0}{m} \ \many{[\beta_i : \kappa_i]}{}{i}{0}{n}.}\tau$}<span style="float:right;">Type Schemes</span></summary>
 <ul>
 <li class="item-description"><span>{$\Sigma$}</span><span>Type scheme alias</span></li>
 <li class="item-description"><span>{$\forall \ \alpha_1 \dots \alpha_m \ [\beta_1 : \kappa_1] \dots [\beta_n : \kappa_n].\tau$}</span><span>A type {$\tau$} containing type variables {$\{\alpha_1, \dots, \alpha_m\}$} and row-type variables {$\{\beta_1, \dots, \beta_n\}$} bound by the universal quantifiers, where the kinds of row-type variables are respectively given by {$\{\kappa_1, \dots, \kappa_n\}$}</span></li>
@@ -41,7 +41,7 @@ date:   2020-01-24 12:30:00 +0000
 </details>
 
 <details>
-<summary>{$\delta \mathrel{\mathop:}= \pi \cmid \{\overline{l_i: \pi_i}^\mid_{0 \leq i \leq n}\}$}<span style="float:right;">Pattern Fields</span></summary>
+<summary>{$\delta \mathrel{\mathop:}= \pi \cmid \{\many{l_i: \pi_i}{\mid}{i}{0}{n}\}$}<span style="float:right;">Pattern Fields</span></summary>
 <ul>
 <li class="item-description"><span>{$\pi$}</span><span>pattern</span></li>
 <li class="item-description"><span>{$\{l_1: \pi_1 \mid \dots \mid l_n: \pi_n\}$}</span><span>Record pattern</span></li>
@@ -57,7 +57,7 @@ date:   2020-01-24 12:30:00 +0000
 </details>
 
 <details>
-<summary>{$\begin{equation*} \begin{split} e \mathrel{\mathop:}= \ &l \cmid x \cmid e_1 \ e_2 \cmid \mathbf{type} \ \Sigma = \sigma \ \mathbf{in} \ e \ \cmid \\ &\mathbf{let} \ f :\!\!\optional{!}\ \optional{\forall \ \overline{\alpha_i}_{0 \leq i \leq m} \ \overline{[\beta_i : \kappa_i]}_{0 \leq i \leq n}.}\overline{(x_i : \tau_i)\to}_{0 \leq i \leq p} \tau_t = e_1 \ \mathbf{in} \ e_2 \ \cmid \\ &\optional{e.+}\{\overline{l_i = e_i}^\mid_{0 \leq i \leq n}\} \cmid e.l \cmid e.-l \ \cmid \\ &\mathbf{match} \ e_1 \ \mathbf{with} \ \langle\overline{\pi_i \Rightarrow e_i}^\mid_{0 \leq i \leq n}\rangle\end{split} \end{equation*}$}<span style="float:right;">Terms</span></summary>
+<summary>{$\begin{equation*} \begin{split} e \mathrel{\mathop:}= \ &l \cmid x \cmid e_1 \ e_2 \cmid \mathbf{type} \ \Sigma = \sigma \ \mathbf{in} \ e \ \cmid \\ &\mathbf{let} \ f :\!\!\optional{!}\ \optional{\forall \ \many{\alpha_i}{}{i}{0}{m} \ \many{[\beta_i : \kappa_i]}{}{i}{0}{n}.}\many{(x_i : \tau_i)\to}{}{i}{0}{p} \tau_t = e_1 \ \mathbf{in} \ e_2 \ \cmid \\ &\lambda :\!\!\optional{!}\ \optional{\forall \ \many{\alpha_i}{}{i}{0}{m} \ \many{[\beta_i : \kappa_i]}{}{i}{0}{n}.}\many{(x_i : \tau_i)\to}{}{i}{1}{p} \tau_t = e \ \cmid \\ &\{\many{l_i = e_i}{\mid}{i}{0}{n}\} \cmid e.\optional{+}\{\many{l_i = e_i}{\mid}{i}{0}{n}\} \cmid e.l \cmid e.-l \ \cmid \\ &\mathbf{match} \ e_1 \ \mathbf{with} \ \langle\many{\pi_i \Rightarrow e_i}{\mid}{i}{0}{n}\rangle\end{split} \end{equation*}$}<span style="float:right;">Terms</span></summary>
 <ul>
 <li class="item-description"><span>{$$}</span><span>TODO</span></li>
 </ul>
@@ -111,9 +111,9 @@ $$\frac{\Delta \vdash \rho_1 \lackRel \kappa_1 \quad \Delta \vdash \rho_2 \lackR
 
 <hr>
 
-$$\frac{}{\Delta \vdash \langle \rho \rangle[\alpha \mapsto \alpha \textbf{ as } \langle \rho \rangle] \sim \alpha \textbf{ as } \langle \rho \rangle} \ \ruleName{Roll}$$
+$$\frac{\Delta;\Gamma \vdash e : \alpha \textbf{ as } \langle \rho \rangle}{\Delta;\Gamma \vdash e : \langle \rho \rangle[\alpha \mapsto \alpha \textbf{ as } \langle \rho \rangle]}$$
 
-$$\frac{}{\Delta \vdash \alpha \textbf{ as } \langle \rho \rangle \sim \langle \rho \rangle[\alpha \mapsto \alpha \textbf{ as } \langle \rho \rangle]} \ \ruleName{Unroll}$$
+$$\frac{\Delta;\Gamma \vdash e : \langle \rho \rangle[\alpha \mapsto \alpha \textbf{ as } \langle \rho \rangle]}{\Delta;\Gamma \vdash e : \alpha \textbf{ as } \langle \rho \rangle}$$
 
 <hr>
 
@@ -131,7 +131,7 @@ $$\frac{\Delta \vdash \rho_1[\mathcal{I_1}] \sim \rho_3 \quad \Delta \vdash \rho
 
 $$\frac{\forall i. \Delta \vdash \rho_1 \sqcup \rho_2 \sim \rho_i, \rho_3[\mathcal{I_3}] \sim \rho_i}{\Delta \vdash \rho_1 \vee \rho_2 \sim \rho_3} \ \ruleName{RowJoin}$$
 
-$$\frac{\Delta \vdash \forall i. \rho_x[\beta_i \mapsto \rho_i] \sim \rho_y, \rho_i \lackRel \kappa_i, \beta_i^{conta} \notin \mathit{frv}(\Delta), \rho_x[\beta_i \mapsto \beta_i^{contra}] \sim \rho_z}{\Delta \vdash \forall i. \Delta, \beta_i^{contra} : \kappa_i \vdash \rho_x \triangleright \rho_z} \ \ruleName{RowContra}$$
+$$\frac{\Delta \vdash \forall i. \rho_x[\beta_i \mapsto \rho_i] \sim \rho_y, \rho_i \lackRel \kappa_i, \beta_i^{contra} \notin \mathit{frv}(\Delta), \rho_x[\beta_i \mapsto \beta_i^{contra}] \sim \rho_z}{\Delta \vdash \forall i. \Delta, \beta_i^{contra} : \kappa_i \vdash \rho_x \triangleright \rho_z} \ \ruleName{RowContra}$$
 
 <hr>
 
@@ -141,7 +141,7 @@ $$\frac{}{\Delta;\Gamma \vdash l: \forall \ \alpha \ [\beta: \{l\}]. \langle l: 
 
 $$\frac{\Delta;\Gamma \vdash f: \tau_1 \to \tau_2 \quad \Delta;\Gamma \vdash e: \tau_1}{\Delta;\Gamma \vdash f \ e: \tau_2} \ \ruleName{App}$$
 
-$$\frac{\Delta;\Gamma \vdash e: \{\overline{l_i: \tau_i}^\mid_{0 \leq i \leq m} \mid \rho\} \\ \{\beta_2, \beta_3\}\notin \mathit{frv}(\Delta) \\ \Delta;\Gamma \vdash \{\overline{l_i = e_i}^\mid_{0 \leq i \leq n}\} : \{\overline{l_i: \tau_i}^\mid_{0 \leq i \leq n} \mid \beta_2\} \\ \Delta \vdash \{\overline{l_i: \tau_i}^\mid_{0 \leq i \leq m} \mid \rho\} \vee  \{\overline{l_i: \tau_i}^\mid_{0 \leq i \leq n} \mid \beta_2\} \sim \{\overline{l_i: \tau_i}^\mid_{0 \leq i \leq k} \mid \beta_3\}}{\Delta;\Gamma \vdash e.+\{\overline{l_i = e_i}^\mid_{0 \leq i \leq n}\} : \{\overline{l_i: \tau_i}^\mid_{0 \leq i \leq k} \mid \beta_3\}} \ \ruleName{Record Extension}$$
+$$\frac{\Delta;\Gamma \vdash e: \{\many{l_i: \tau_i}{\mid}{i}{0}{m} \mid \beta_1\} \\ \beta_2 \notin \mathit{frv}(\Delta) \quad \Delta, \beta_2 : \{\many{l_j}{,}{j}{0}{n}\};\Gamma \vdash \{\many{l_j = e_j}{\mid}{j}{0}{n}\} : \{\many{l_j: \tau_j}{\mid}{j}{0}{n} \mid \beta_2\} \\ \kappa_2 = \{\many{l_j}{,}{j}{0}{n}\} \quad \Delta \vdash \beta_1 \# \kappa_1 \quad \kappa_1 \cap \kappa_2 = \emptyset \\ \Delta, \beta_2 : \kappa_2 \vdash \{\many{l_i: \tau_i}{\mid}{i}{0}{m} \mid \beta_1\} \vee  \{\many{l_j: \tau_j}{\mid}{j}{0}{n} \mid \beta_2\} \sim \{\many{l_k: \tau_k}{\mid}{k}{0}{m+n} \mid \beta_3\}}{\Delta;\Gamma \vdash e.+\{\many{l_j = e_j}{\mid}{j}{0}{n}\} : \{\many{l_k: \tau_k}{\mid}{k}{0}{m+n} \mid \beta_3\}} \ \ruleName{Record Extension}$$
 
 <hr>
 <!--
