@@ -20,9 +20,9 @@ type Id = String
 
 type Label = Id
 
-data Lack = Lack [Label] | NegLack [Label] deriving (Show, Eq, Ord)
+data Pres = Pres [Label] | Lack [Label] deriving (Show, Eq, Ord)
 
-data Row = RowId Id | EmptyRow | Extend (Label, Type) Row {-| Join Row Row | Meet Row Row-} deriving (Show, Eq, Ord)
+data Row = RowId Id | EmptyRow | Extend (Label, Type) Row deriving (Show, Eq, Ord)
 
 data TypeScheme = TypeSchemeId Id | TypeScheme [Id] [(Id, Lack)] Type deriving (Show, Eq, Ord)
 
