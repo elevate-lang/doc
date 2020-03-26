@@ -28,6 +28,8 @@ layout: default
               presRel: "\\ \\succ \\ ",
               contraRel: "\\ \\triangleright \\ ",
               unfoldRel: "\\ \\Rrightarrow \\ ",
+              ptRel: "\\ \\leadsto \\ ",
+              ptWith: "\\otimes",
               wellFormed: "\\ \\mathbf{ok}",
               keyword: ["\\textcolor{Violet}{\\mathbf{#1}}", 1],
               label: ["\\textcolor{NavyBlue}{\\mathtt{#1}}", 1],
@@ -97,7 +99,17 @@ layout: default
       <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     -->
       <style>
+        hr.split {
+          margin-top: 2em;
+          margin-bottom: 2em;
+          border: none;
+          height: 0.08em;
+          background-image: linear-gradient(to right, rgba(0, 0, 0, 0), rgb(0, 0, 0), rgba(0, 0, 0, 0));
+        }
         details {
+          border-top-style: dashed;
+          border-top-width: 0.02em;
+          border-top-color: darkslategrey;
           padding-top: 0.5em;
           padding-bottom: 0.5em;
         }
