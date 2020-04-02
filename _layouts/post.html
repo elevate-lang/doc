@@ -24,13 +24,16 @@ layout: default
               cmid: "\\textcolor{NavyBlue}{\\ \\mid\\!\\!\\mid \\ }",
               optional: ["\\textcolor{NavyBlue}{\[\\!\\!\[} #1 \\textcolor{NavyBlue}{\]\\!\\!\]}", 1],
               many: ["\\textcolor{NavyBlue}{\\overline{\\textcolor{Black}{#1}}^{\\textcolor{Black}{#2}}_{#3 \\in \[#4, #5\]}}", 5],
+              some: ["\\textcolor{NavyBlue}{\\overline{\\overline{\\textcolor{Black}{#1}}}^{\\textcolor{Black}{#2}}_{#3 \\in \[#4, #5\]}}", 5],
               lackRel: "\\ \\# \\ ",
               presRel: "\\ \\succ \\ ",
               contraRel: "\\ \\triangleright \\ ",
               unfoldRel: "\\ \\Rrightarrow \\ ",
-              ptRel: "\\ \\leadsto \\ ",
-              ptWith: "\\otimes",
+              ptRel: "\\dashv",
+              ptWith: "\\vdash",
+              ptpre: "\\approx",
               wellFormed: "\\ \\mathbf{ok}",
+              ofKind: ["\\ {::} \\ \\mathbb{#1}", 1],
               keyword: ["\\textcolor{Violet}{\\mathbf{#1}}", 1],
               label: ["\\textcolor{NavyBlue}{\\mathtt{#1}}", 1],
               tsvar: ["\\textcolor{RedOrange}{\\mathtt{#1}}", 1],
@@ -99,6 +102,18 @@ layout: default
       <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     -->
       <style>
+        details.inner {
+          margin-left: 2em;
+          border-top-style: none;
+          border-bottom-style: dashed;
+        }
+        div.MathJax_SVG_Display {
+          padding-top: 1em;
+          padding-bottom: 1em;
+        }
+        div.MathJax_SVG_Display:hover {
+          background-color: whitesmoke;
+        }
         hr.split {
           margin-top: 2em;
           margin-bottom: 2em;
@@ -108,8 +123,8 @@ layout: default
         }
         details {
           border-top-style: dashed;
-          border-top-width: 0.02em;
-          border-top-color: darkslategrey;
+          border-width: 0.02em;
+          border-color: darkslategrey;
           padding-top: 0.5em;
           padding-bottom: 0.5em;
         }

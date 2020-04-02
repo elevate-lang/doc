@@ -3,6 +3,8 @@
 {-# LANGUAGE DataKinds, GADTs, KindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE LambdaCase #-}
+{-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
+{-# OPTIONS_GHC -fwarn-overlapping-patterns #-}
 
 module Parser where
 
