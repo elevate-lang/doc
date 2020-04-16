@@ -28,7 +28,11 @@ layout: default
               lackRel: "\\ \\# \\ ",
               presRel: "\\ \\succ \\ ",
               contraRel: "\\ \\triangleright \\ ",
-              unfoldRel: "\\ \\Rrightarrow \\ ",
+              unfoldRel: "\\ \\Rightarrow \\ ",
+              rpeRel: ["\\dashv^{#1}", 1],
+              elabRel: "\\ \\rightarrowtail \\ ",
+              elabph: "\\diamond",
+              mergeRel: ["#1 \\oplus #2 \\rightsquigarrow #3", 3],
               ptRel: "\\dashv",
               ptWith: "\\vdash",
               ptpre: "\\approx",
@@ -123,7 +127,7 @@ layout: default
         }
         details {
           border-top-style: dashed;
-          border-width: 0.02em;
+          border-width: 0.05em;
           border-color: darkslategrey;
           padding-top: 0.5em;
           padding-bottom: 0.5em;

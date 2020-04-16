@@ -423,6 +423,69 @@ type Expr = forall [p]. e as <
 | App: {Fun: e | Arg: e | Type: Type | *}
 | Primitive: Primitive[p] | *> in
 _
+e : Maybe Bool
+e : <Just : <True: {*} | False: {*} | *> | Nothing: {*} | *>
+match e <
+  Just True => ??? | <Just: <True: {*} | a> | r> [a -> <False: {*} | *>; r -> <Nothing: {*} | *>]
+  <Just: <a> | r> [a -> <False: {*} | *>; r -> <Nothing: {*} | *>]
+  <Just: <False: {*} | *> | Nothing: {*} | *>
+  Just x => ??? |
+  n => ???
+>
+
+App {Fun: {A: True | B: b} | Arg: Map}
+App x 
+
+{A: True} |-y (y.A, True)
+{A: True | B: b} |-y (y.A, True), (y.B, b)
+{Fun: {A: True | B: b}} |-x (x.Fun.A, True), (x.Fun.B, b)
+{Fun: {A: True | B: b} | Arg: Map} |-x (x.Fun.A, True), (x.Fun.B, b), (x.Arg, Map)
+
+match expr with <
+App {Fun: {A: True | B: b} | Arg: Map} => rhs_1 |
+App {Fun: {A: False | B: b} | Type: Bool} => rhs_2
+>
+
+App x => match x.Fun.A with <
+  True => match x.Fun.B with <
+    b => match x.Arg with <
+      Map => rhs_1
+    >
+  > |
+  False => match x.Fun.B with <
+    b => match x.Arg with <
+      Map => rhs_1
+    >
+  >
+>
+
+App x => match x.Fun.A with <
+  True => match x.Fun.B with <
+    b => match x.Arg with <
+      Map => rhs_1
+    >
+  >
+>
+
+App x => match x.Fun.A with <
+  False => match x.Fun.B with <
+    b => match x.Type with <
+      Bool => rhs_2
+    >
+  >
+>
+
+App z => match z.Fun.A with <
+  False => match z.Fun.B with <
+    b => match z.Type with <
+      Bool => rhs_2
+    >
+  >
+>
+
+
+
+
 |]
 
 fusionExample :: String
