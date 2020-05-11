@@ -30,12 +30,24 @@ layout: default
               contraRel: "\\ \\triangleright \\ ",
               unfoldRel: "\\ \\Rightarrow \\ ",
               rpeRel: ["\\dashv^{#1}", 1],
-              elabRel: "\\ \\rightarrowtail \\ ",
+              expRel: "\\ \\rightarrowtail \\ ",
               elabph: "\\diamond",
               mergeRel: ["#1 \\oplus #2 \\rightsquigarrow #3", 3],
+              grpRel: "\\ggg",
+              revRel: "\\circlearrowleft",
+              sortRel: "\\twoheadrightarrow",
+              tagRel: "\\looparrowright",
+              pteRel: "\\blacktriangleright",
+              metaIf: ["\\textcolor{NavyBlue}{\\mathbf{if(}} \\ #1 \\ \\textcolor{NavyBlue}{\\mathbf{)then\\{}} \\ #2 \\ \\textcolor{NavyBlue}{\\mathbf{\\}else\\{}} \\ #3 \\ \\textcolor{NavyBlue}{\\}}", 3],
+              varPat: "\\downarrow",
+              nvarPat: "\\uparrow",
+              ofProp: ":\\!\\!\\triangleright",
+              prefRel: "\\prec",
+              keyCond: ["\\underline{#1}", 1],
+              elabRel: "\\ \\rightarrowtail\\!\\!\\!\\!\\!\\!\\rightarrowtail \\ ",
               ptRel: "\\dashv",
               ptWith: "\\vdash",
-              ptpre: "\\approx",
+              ptpre: "\\sim",
               wellFormed: "\\ \\mathbf{ok}",
               ofKind: ["\\ {::} \\ \\mathbb{#1}", 1],
               keyword: ["\\textcolor{Violet}{\\mathbf{#1}}", 1],
@@ -116,7 +128,7 @@ layout: default
           padding-bottom: 1em;
         }
         div.MathJax_SVG_Display:hover {
-          background-color: whitesmoke;
+          background-color: rgba(220, 220, 220, 0.137);
         }
         hr.split {
           margin-top: 2em;
@@ -131,9 +143,14 @@ layout: default
           border-color: darkslategrey;
           padding-top: 0.5em;
           padding-bottom: 0.5em;
+          background-color: rgba(220, 220, 220, 0.137);
         }
         details summary:hover {
-          background-color: whitesmoke;
+          background-color: rgba(220, 220, 220, 0.137);
+        }
+        details summary {
+          overflow: hidden;
+          padding-right: 0.5em;
         }
         li.item-description {
           list-style: none;
@@ -156,7 +173,7 @@ layout: default
         li.item-description > span:first-of-type {
           border-radius: 0.15em;
           padding: 0px 0.2em 0px 0.2em;
-          background-color: whitesmoke;
+          background-color: rgba(220, 220, 220, 0.137);
         }
       </style>
   </header>
