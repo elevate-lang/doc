@@ -1,4 +1,4 @@
-{-# LANGUAGE QuasiQuotes, TemplateHaskell #-}
+{-# LANGUAGE TupleSections, QuasiQuotes, TemplateHaskell #-}
 {-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
 {-# LANGUAGE DataKinds, GADTs, KindSignatures #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -14,36 +14,35 @@ import Data.Functor.Identity
 import Data.Set as Set
 import Data.Map.Strict as Map
 import Text.RawString.QQ
-import Data.Functor.Foldable.TH
-import Data.Functor.Foldable
 import Data.List
 
 type Id = String
 
 type Label = Id
 
-data Pres = Pres [Label] | Lack [Label] deriving (Show, Eq, Ord)
+data Pres = Pres [Label] | Lack [Label] | UnkonwnPres deriving (Show, Eq, Ord)
 
 data Row = RowId Id | EmptyRow | Extend (Label, Type) Row deriving (Show, Eq, Ord)
 
-data TypeScheme = TypeSchemeId Id | TypeScheme [Id] [(Id, Lack)] Type deriving (Show, Eq, Ord)
+data TypeScheme = TypeSchemeId Id | TypeScheme [Id] [(Id, Pres)] Type deriving (Show, Eq, Ord)
 
 data Type = 
-  TypeId Id | 
+  TypeId Id | UnknownType |
   FunType Type Type | 
   VariantType Row | RecordType Row | RecVariantType Id Row | 
   TypeInst TypeScheme [Type] [Row] deriving (Show, Eq, Ord)
 
-data PatternField = PatternField Pattern | RecordField [(Label, Pattern)] deriving (Show, Eq, Ord)
-
-data Pattern = PatternId Id | PatternApp Label PatternField deriving (Show, Eq, Ord)
+data Pattern = 
+  IdPattern Id | LabelPattern Label | MatchAllPattern |
+  AppPattern Label Pattern | RecordPattern [(Label, Pattern)] deriving (Show, Eq, Ord)
 
 data Term = 
   Label Label |
   TermId Id | App Term Term |
   TypeDef Id TypeScheme Term |
-  FunDef Id Bool [Id] [(Id, Lack)] [(Id, Type)] Type Term Term |
-  Record [(Label, Term)] | FieldAccess Term Label |
+  FunDef Id Bool [Id] [(Id, Pres)] [(Id, Type)] Type Term Term |
+  RecordCons [(Label, Term)] | FieldAccess Term Label | FieldRemove Term Label |
+  RecordMod Term [(Label, Term)] | RecordExt Term [(Label, Term)] |
   Match Term [(Pattern, Term)] deriving (Show, Eq, Ord)
 
 type Parser m u a = ParsecT String u m a
@@ -78,7 +77,7 @@ initUpperId = do
 
 initLowerId :: (Monad m) => Parser m u Id
 initLowerId = do
-  name <- (:) <$> (lower <|> char '_' <|> char '\\') <*> many alphaNum
+  name <- (:) <$> (lower <|> char '\\') <*> many alphaNum
   if Set.member name keywords then 
     unexpected ("error: " ++ name ++ " is a keyword")
   else return name
@@ -90,7 +89,7 @@ num :: (Monad m) => Parser m u Label
 num = many1 digit
 
 termId :: (Monad m) => Parser m u Id
-termId = initLowerId
+termId = initLowerId <|> string "_"
 
 typeId :: (Monad m) => Parser m u Id
 typeId = initLowerId
@@ -104,33 +103,20 @@ typeSchemeId = initUpperId
 patternId :: (Monad m) => Parser m u Id
 patternId = initLowerId
 
-{-
-atomicRow :: (Monad m) => Parser m u Row
-atomicRow = parens row <|> (RowId <$> rowId) <|> (EmptyRow <$ char '#') <|>
-  (Extend <$> ((,) <$> (label <* spaced (char ':')) <*> 
-    type_ <* spaced (char '|')) <*> atomicRow)
-
-meetRow :: (Monad m) => Parser m u Row
-meetRow = chainl1 atomicRow (Meet <$ try (spaced (string "/\\")))
-
-row :: (Monad m) => Parser m u Row
-row = chainl1 meetRow (Join <$ try (spaced (string "\\/")))
--}
+pres :: (Monad m) => Parser m u Pres
+pres = ((Lack <$ (char '~' *> many space)) <|> pure Pres) <*> 
+  (braces (label `sepBy` (try $ spaced (char ','))))
 
 row :: (Monad m) => Parser m u Row
 row = (RowId <$> rowId) <|> (EmptyRow <$ char '*') <|>
   (Extend <$> ((,) <$> (label <* spaced (char ':')) <*> 
     type_ <* spaced (char '|')) <*> row)
 
-lack :: (Monad m) => Parser m u Lack
-lack = ((NegLack <$ (char '~' *> many space)) <|> pure Lack) <*> 
-  (braces (label `sepBy` (try $ spaced (char ','))))
-
-forall :: (Monad m) => Parser m u ([Id], [(Id, Lack)])
+forall :: (Monad m) => Parser m u ([Id], [(Id, Pres)])
 forall = string "forall" *> many space *> 
   ((,) <$> many (typeId <* many space) <*> 
     many (brackets ((,) <$> rowId <*> 
-      option (Lack []) (spaced (char ':') *> lack)) <* many space)) <* spaced (char '.')
+      option UnkonwnPres (spaced (char ':') *> pres)) <* many space)) <* spaced (char '.')
 
 forallTypeScheme :: (Monad m) => Parser m u TypeScheme
 forallTypeScheme = uncurry TypeScheme <$> option ([], []) (try forall) <*> type_
@@ -145,38 +131,57 @@ atomicType :: (Monad m) => Parser m u Type
 atomicType = (TypeInst <$> 
   ((TypeSchemeId <$> typeSchemeId) <|> try (parens forallTypeScheme)) <*> 
   (many space *> many (atomicType <* many space)) <*> many (brackets row <* many space)) <|>
-  parens type_ <|> try recVariantType <|> (TypeId <$> try typeId) <|> 
+  (UnknownType <$ char '_') <|> parens type_ <|> try recVariantType <|> (TypeId <$> try typeId) <|> 
   (VariantType <$> angles row) <|> (RecordType <$> braces row)
 
 type_ :: (Monad m) => Parser m u Type
 type_ = chainr1 atomicType (FunType <$ try (spaced (string "->")))
 
-patternField :: (Monad m) => Parser m u PatternField
-patternField = (RecordField <$> braces (((,) <$> label <* spaced (char ':') <*> pattern) `sepBy` 
-  (try $ spaced (char '|')))) <|>
-  (PatternField <$> (parens pattern <|> (PatternId <$> patternId) <|> 
-    (PatternApp <$> (label <|> num) <*> pure (RecordField []))))
+recordPattern :: (Monad m) => Parser m u Pattern
+recordPattern = RecordPattern <$> braces (
+  ((,) <$> label <* spaced (char ':') <*> pattern) `sepBy` 
+  (try $ spaced (char '|')))
+
+atomicPattern :: (Monad m) => Parser m u Pattern
+atomicPattern = (LabelPattern <$> (label <|> num)) <|>
+  parens pattern <|> (IdPattern <$> patternId) <|> (MatchAllPattern <$ char '_') <|>
+  recordPattern
 
 pattern :: (Monad m) => Parser m u Pattern
-pattern = (PatternApp <$> label <* many space <*> (patternField <|> pure (RecordField []))) <|>
-  (PatternApp <$> num <*> pure (RecordField [])) <|>
-  (PatternId <$> patternId)
+pattern = try (AppPattern <$> label <* many space <*> atomicPattern) <|> atomicPattern
 
-recordTerm :: (Monad m) => Parser m u Term
-recordTerm = Record <$> braces (((,) <$> label <* spaced (char ':') <*> term) `sepBy` (try $ spaced (char '|')))
+recordForm :: (Monad m) => Parser m u [(Label, Term)]
+recordForm = braces (((,) <$> label <* spaced (char ':') <*> term) `sepBy` (try $ spaced (char '|')))
 
 atomicTerm :: (Monad m) => Parser m u Term
-atomicTerm = parens term <|> (Label <$> label) <|> (App <$> (Label <$> num) <*> pure (Record [])) <|>
-  (TermId <$> termId) <|> recordTerm
+atomicTerm = parens term <|> (Label <$> label) <|> (App <$> (Label <$> num) <*> pure (RecordCons [])) <|>
+  (TermId <$> termId) <|> (RecordCons <$> recordForm)
 
-accessTerm :: (Monad m) => Parser m u Term
-accessTerm = atomicTerm >>= fieldAccess
-  where fieldAccess t = do {
-    l <- char '.' *> label;
-    fieldAccess (FieldAccess t l)} <|> return t
+recordTerm :: (Monad m) => Parser m u Term
+recordTerm = atomicTerm >>= recordOps
+  where 
+    recordOps t = fieldAccess t <|> fieldRemove t <|> 
+      recordMod t <|> recordExt t <|> return t
+    
+    fieldAccess t = do
+      l <- char '.' *> label
+      recordOps (FieldAccess t l)
+    
+    fieldRemove t = do
+      l <- try (string ".-") *> label
+      recordOps (FieldRemove t l)
 
+    recordMod t = do
+      r <- char '.' *> recordForm
+      recordOps (RecordMod t r)
+
+    recordExt t = do
+      r <- try (string ".+") *> recordForm
+      recordOps (RecordExt t r)
+
+    
 appTerm :: (Monad m) => Parser m u Term
-appTerm = chainl1 (try (many space *> accessTerm)) (App <$ lookAhead (many1 space))
+appTerm = chainl1 (try (many space *> recordTerm)) (App <$ lookAhead (many1 space))
 
 typeDef :: (Monad m) => Parser m u Term
 typeDef = TypeDef <$> 
@@ -184,8 +189,8 @@ typeDef = TypeDef <$>
   (typeScheme <* spaced (string "in")) <*>
   term
 
-funDef :: (Monad m) => Parser m u Term
-funDef = uncurry <$> (FunDef <$>
+funDefComp :: (Monad m) => Parser m u Term
+funDefComp = uncurry <$> (FunDef <$>
   (try (string "let" *> many1 space) *> termId <* many space) <*>
   (char ':' *> option False (True <$ char '!') <* many space)) <*>
   option ([], []) (try forall) <*>
@@ -194,13 +199,35 @@ funDef = uncurry <$> (FunDef <$>
   (term <* spaced (string "in")) <*>
   term
 
-lamDef :: (Monad m) => Parser m u Term
-lamDef = uncurry <$> (FunDef <$>
+funDefSimp :: (Monad m) => Parser m u Term
+funDefSimp = FunDef <$>
+  (try (string "let" *> many1 space) *> termId <* many space) <*>
+  pure False <*> pure [] <*> pure [] <*>
+  many (((, UnknownType) <$> termId) <* spaced (string "->")) <*>
+  (UnknownType <$ spaced (char '=')) <*>
+  (term <* spaced (string "in")) <*>
+  term
+
+funDef :: (Monad m) => Parser m u Term
+funDef = try funDefComp <|> funDefSimp
+
+lamDefComp :: (Monad m) => Parser m u Term
+lamDefComp = uncurry <$> (FunDef <$>
   (try (string "lam") *> pure "" <* many space) <*>
   (char ':' *> option False (True <$ char '!') <* many space)) <*>
   option ([], []) (try forall) <*>
-  many (parens ((,) <$> termId <* spaced (char ':') <*> type_) <* spaced (string "->")) <*>
+  many1 (parens ((,) <$> termId <* spaced (char ':') <*> type_) <* spaced (string "->")) <*>
   (type_ <* spaced (char '=')) <*> term <*> pure (TermId "")
+
+lamDefSimp :: (Monad m) => Parser m u Term
+lamDefSimp = FunDef <$>
+  (try (string "lam") *> pure "" <* many space) <*>
+  pure False <*> pure [] <*> pure [] <*>
+  many1 (((, UnknownType) <$> termId) <* spaced (string "->")) <*>
+  (UnknownType <$ spaced (char '=')) <*> term <*> pure (TermId "")
+
+lamDef :: (Monad m) => Parser m u Term
+lamDef = try lamDefComp <|> lamDefSimp
 
 match :: (Monad m) => Parser m u Term
 match = Match <$>
@@ -216,6 +243,7 @@ program = spaced term <* eof
 testRun :: Parser Identity () a -> String -> Either ParseError a
 testRun p s = parse (p <* eof) "" s
 
+{-
 escape :: String -> String
 escape = concatMap (\case
   '_' -> "\\_"
@@ -395,6 +423,7 @@ toLaTeX :: String -> IO ()
 toLaTeX s = case parse (program <* eof) "" s of
   Right p -> putStrLn (renderProgram p)
   Left e -> print e
+-}
 
 example :: String
 example = [r|
@@ -423,69 +452,6 @@ type Expr = forall [p]. e as <
 | App: {Fun: e | Arg: e | Type: Type | *}
 | Primitive: Primitive[p] | *> in
 _
-e : Maybe Bool
-e : <Just : <True: {*} | False: {*} | *> | Nothing: {*} | *>
-match e <
-  Just True => ??? | <Just: <True: {*} | a> | r> [a -> <False: {*} | *>; r -> <Nothing: {*} | *>]
-  <Just: <a> | r> [a -> <False: {*} | *>; r -> <Nothing: {*} | *>]
-  <Just: <False: {*} | *> | Nothing: {*} | *>
-  Just x => ??? |
-  n => ???
->
-
-App {Fun: {A: True | B: b} | Arg: Map}
-App x 
-
-{A: True} |-y (y.A, True)
-{A: True | B: b} |-y (y.A, True), (y.B, b)
-{Fun: {A: True | B: b}} |-x (x.Fun.A, True), (x.Fun.B, b)
-{Fun: {A: True | B: b} | Arg: Map} |-x (x.Fun.A, True), (x.Fun.B, b), (x.Arg, Map)
-
-match expr with <
-App {Fun: {A: True | B: b} | Arg: Map} => rhs_1 |
-App {Fun: {A: False | B: b} | Type: Bool} => rhs_2
->
-
-App x => match x.Fun.A with <
-  True => match x.Fun.B with <
-    b => match x.Arg with <
-      Map => rhs_1
-    >
-  > |
-  False => match x.Fun.B with <
-    b => match x.Arg with <
-      Map => rhs_1
-    >
-  >
->
-
-App x => match x.Fun.A with <
-  True => match x.Fun.B with <
-    b => match x.Arg with <
-      Map => rhs_1
-    >
-  >
->
-
-App x => match x.Fun.A with <
-  False => match x.Fun.B with <
-    b => match x.Type with <
-      Bool => rhs_2
-    >
-  >
->
-
-App z => match z.Fun.A with <
-  False => match z.Fun.B with <
-    b => match z.Type with <
-      Bool => rhs_2
-    >
-  >
->
-
-
-
-
 |]
 
 fusionExample :: String
@@ -493,7 +459,7 @@ fusionExample = [r|
 let fusion: Strategy
   [App: {Fun: <App: {Fun: <Primitive: <Map: {*} | r6> | r5> | Arg: f | r4} | r3> | Arg: <App: {Fun: <App: {Fun: <Primitive: <Map: {*} | r12> | r11> | Arg: g | r10} | r9> | Arg: x | r8} | r7> | r1} | r0]
   [App: {Fun: <App: {Fun: <Primitive: <Map: {*} | h5> | h4> | Arg: <Lam: {Param: Nat | Body: <App: {Fun: f | Arg: <App: {Fun: g | Arg: <Id: {Name: Nat | h13} | h12> | h11} | h10> | h9} | h8> | h7} | h6> | h3} | h2> | Arg: x | h1} | h0] = 
-  lam: (x: <_>) -> Result <_> Nat = match x with <
+  lam: (x: _) -> Result _ Nat = match x with <
     App {Fun: App {Fun: Primitive Map | Arg: f} | Arg: App {Fun: App {Fun: Primitive Map | Arg: g} | Arg: x}} => 
     Success (App {Fun: App {Fun: Primitive Map | Arg: Lam {Param: 0 | Body: App {Fun: f | Arg: App {Fun: g | Arg: Id {Name: 0}}}}} | Arg: x})
   | _ => Failure 1

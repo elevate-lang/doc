@@ -14,6 +14,12 @@ layout: default
         • <span itemprop="author" itemscope itemtype="http://schema.org/Person"><span class="p-author h-card" itemprop="name">{{ page.author }}</span></span>
       {%- endif -%}</p>
     <!-- MathJax v2 -->
+    <!-- 
+      How to print these macros in LaTeX format? 
+      In the debug console:
+      >> var macros = MathJax.Hub.config.TeX.Macros;
+      >> console.log(Object.keys(macros).map(n => (typeof(macros[n]) === "string") ? ("\\newcommand{\\" + n + "}{" + macros[n] + "}") : ("\\newcommand{\\" + n + "}[" + macros[n][1] + "]{" + macros[n][0] + "}")).join("\n"))
+    -->
       <script type="text/x-mathjax-config">
         MathJax.Hub.Config({
           TeX: {
@@ -32,16 +38,17 @@ layout: default
               rpeRel: ["\\dashv^{#1}", 1],
               expRel: "\\ \\rightarrowtail \\ ",
               elabph: "\\diamond",
-              mergeRel: ["#1 \\oplus #2 \\rightsquigarrow #3", 3],
+              mergeRel: ["#1 \\leftarrow\\!\\!\\!\\!\\subset #2 \\rightsquigarrow #3", 3],
               grpRel: "\\ggg",
               revRel: "\\circlearrowleft",
               sortRel: "\\twoheadrightarrow",
               tagRel: "\\looparrowright",
               pteRel: "\\blacktriangleright",
+              shrRel: ":\\!\\!\\triangleright",
               metaIf: ["\\textcolor{NavyBlue}{\\mathbf{if(}} \\ #1 \\ \\textcolor{NavyBlue}{\\mathbf{)then\\{}} \\ #2 \\ \\textcolor{NavyBlue}{\\mathbf{\\}else\\{}} \\ #3 \\ \\textcolor{NavyBlue}{\\}}", 3],
               varPat: "\\downarrow",
               nvarPat: "\\uparrow",
-              ofProp: ":\\!\\!\\triangleright",
+              ofProp: ":\\!\\!\\diamond",
               prefRel: "\\prec",
               keyCond: ["\\underline{#1}", 1],
               elabRel: "\\ \\rightarrowtail\\!\\!\\!\\!\\!\\!\\rightarrowtail \\ ",

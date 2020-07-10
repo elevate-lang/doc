@@ -256,7 +256,7 @@ $$\frac{\tilde{\pi}_2[\mathcal{S}] \ptpre \tilde{\pi}_1 \\ \forall \ k \in [0, p
 -->
 
 <details>
-<summary>Pattern Elaboration<span style="float:right;">{$\mathbf{match} \ e \ \mathbf{with} \ \langle\some{\pi_i \Rightarrow e_i}{\mid}{i}{0}{n}\rangle \elabRel \varpi$}</span></summary>
+<summary>Pattern Elaboration<span style="float:right;">{$\vdash^{\ell} \mathbf{match} \ e \ \mathbf{with} \ \langle\some{\pi_i \Rightarrow e_i}{\mid}{i}{0}{n}\rangle \elabRel \varpi$}</span></summary>
 <details class = "inner">
 <summary>{$\tilde{\pi} \mathrel{\mathop:}= x \cmid l \ \optional{x}$}<span style="float:right;">Elaborated Patterns</span></summary>
 </details>
@@ -273,7 +273,7 @@ $$\frac{\tilde{\pi}_2[\mathcal{S}] \ptpre \tilde{\pi}_1 \\ \forall \ k \in [0, p
 </ul>
 </details>
 <details class = "inner">
-<summary>{$\varpi \mathrel{\mathop:}= e \cmid \mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle\some{\tilde{\pi}_i \Rightarrow \varpi_i}{\mid}{i}{0}{n}\rangle$}<span style="float:right;">Match Chain</span></summary>
+<summary>{$\varpi \mathrel{\mathop:}= e^{\ell} \cmid \mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle\some{\tilde{\pi}_i \Rightarrow \varpi_i}{\mid}{i}{0}{n}\rangle$}<span style="float:right;">Match Chain</span></summary>
 <ul>
 <li class="item-description"><span>{$$}</span><span>TODO</span></li>
 </ul>
@@ -291,22 +291,22 @@ $$\frac{\tilde{\pi}_2[\mathcal{S}] \ptpre \tilde{\pi}_1 \\ \forall \ k \in [0, p
 </ul>
 </details>
 <details class = "inner">
-<summary>Pattern Expansion<span style="float:right;">{$R \vdash^{\ell}_{x} \mathbf{match} \ \delta \ \mathbf{with} \ \langle \pi \Rightarrow e \rangle \expRel \varpi$}</span></summary>
-$$\frac{}{R \vdash^{\ell}_{x} \mathbf{match} \ \delta \ \mathbf{with} \ \langle v \Rightarrow e \rangle \expRel \mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle v \Rightarrow e \rangle}$$
+<summary>Pattern Expansion<span style="float:right;">{$R \vdash^{\ell; \ell}_{x} \mathbf{match} \ \delta \ \mathbf{with} \ \langle \pi \Rightarrow e \rangle \expRel \varpi$}</span></summary>
+$$\frac{}{R \vdash^{\ell_e; \ell}_{x} \mathbf{match} \ \delta \ \mathbf{with} \ \langle v \Rightarrow e \rangle \expRel \mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle v \Rightarrow e^{\ell_e} \rangle}$$
 
-$$\frac{}{R \vdash^{\ell}_{x} \mathbf{match} \ \delta \ \mathbf{with} \ \langle l \Rightarrow e \rangle \expRel \mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle l \Rightarrow e \rangle}$$
+$$\frac{}{R \vdash^{\ell_e; \ell}_{x} \mathbf{match} \ \delta \ \mathbf{with} \ \langle l \Rightarrow e \rangle \expRel \mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle l \Rightarrow e^{\ell_e} \rangle}$$
 
-$$\frac{}{R \vdash^{\ell}_{x} \mathbf{match} \ \delta \ \mathbf{with} \ \langle l \ v \Rightarrow e \rangle \expRel \mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle l \ v \Rightarrow e \rangle}$$
+$$\frac{}{R \vdash^{\ell_e; \ell}_{x} \mathbf{match} \ \delta \ \mathbf{with} \ \langle l \ v \Rightarrow e \rangle \expRel \mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle l \ v \Rightarrow e^{\ell_e} \rangle}$$
 
-$$\frac{v \ \mathbf{fresh} \quad \cdot \vdash^{\ell \mid 0}_{v} \mathbf{match} \ v \ \mathbf{with} \ \langle \pi \Rightarrow e \rangle \expRel \varpi}{R \vdash^{\ell}_{x} \mathbf{match} \ \delta \ \mathbf{with} \ \langle l \ \pi \Rightarrow e \rangle \expRel \mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle l \ v \Rightarrow \varpi \rangle}$$
+$$\frac{v \ \mathbf{fresh} \quad \cdot \vdash^{\ell_e; \ell \mid 0}_{v} \mathbf{match} \ v \ \mathbf{with} \ \langle \pi \Rightarrow e \rangle \expRel \varpi}{R \vdash^{\ell_e; \ell}_{x} \mathbf{match} \ \delta \ \mathbf{with} \ \langle l \ \pi \Rightarrow e \rangle \expRel \mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle l \ v \Rightarrow \varpi \rangle}$$
 
-$$\frac{v \ \mathbf{fresh}}{R \vdash^{\ell}_{x} \mathbf{match} \ \delta \ \mathbf{with} \ \langle \{\} \Rightarrow e \rangle \expRel \mathbf{match}^{\ell} \ \delta.\{\} \ \mathbf{with} \ \langle v \Rightarrow e \rangle}$$
+$$\frac{v \ \mathbf{fresh}}{R \vdash^{\ell_e; \ell}_{x} \mathbf{match} \ \delta \ \mathbf{with} \ \langle \{\} \Rightarrow e \rangle \expRel \mathbf{match}^{\ell} \ \delta.\{\} \ \mathbf{with} \ \langle v \Rightarrow e^{\ell_e} \rangle}$$
 
-$$\frac{l \notin R \\ R \vdash^{\ell}_{v} \mathbf{match} \ v.l \ \mathbf{with} \ \langle \pi \Rightarrow e \rangle \expRel \varpi}{R \vdash^{\ell}_{v} \mathbf{match} \ v \ \mathbf{with} \ \langle \{l: \pi\} \Rightarrow e \rangle \expRel \varpi}$$
+$$\frac{l \notin R \\ R \vdash^{\ell_e;\ell}_{v} \mathbf{match} \ v.l \ \mathbf{with} \ \langle \pi \Rightarrow e \rangle \expRel \varpi}{R \vdash^{\ell_e;\ell}_{v} \mathbf{match} \ v \ \mathbf{with} \ \langle \{l: \pi\} \Rightarrow e \rangle \expRel \varpi}$$
 
-$$\frac{l \notin R \\ R,l \vdash^{\ell \mid (n + 1)}_{v} \mathbf{match} \ v \ \mathbf{with} \ \langle \{\some{l_i: \pi_i}{\mid}{i}{0}{n}\} \Rightarrow e \rangle \expRel \varpi_1 \\ R \vdash^{\ell \mid n}_{v} \mathbf{match} \ v.l \ \mathbf{with} \ \langle \pi \Rightarrow \varpi_1 \rangle \expRel \varpi_2}{R \vdash^{\ell \mid n}_{v} \mathbf{match} \ v \ \mathbf{with} \ \langle \{l: \pi \mid \some{l_i: \pi_i}{\mid}{i}{0}{n}\} \Rightarrow e \rangle \expRel \varpi_2}$$
+$$\frac{l \notin R \\ R,l \vdash^{\ell_e;\ell \mid (n + 1)}_{v} \mathbf{match} \ v \ \mathbf{with} \ \langle \{\some{l_i: \pi_i}{\mid}{i}{0}{n}\} \Rightarrow e \rangle \expRel \varpi_1 \\ R \vdash^{\ell_e;\ell \mid n}_{v} \mathbf{match} \ v.l \ \mathbf{with} \ \langle \pi \Rightarrow \varpi_1 \rangle \expRel \varpi_2}{R \vdash^{\ell_e;\ell \mid n}_{v} \mathbf{match} \ v \ \mathbf{with} \ \langle \{l: \pi \mid \some{l_i: \pi_i}{\mid}{i}{0}{n}\} \Rightarrow e \rangle \expRel \varpi_2}$$
 
-$$\frac{v \ \mathbf{fresh} \\ \cdot \vdash^{\ell \mid 0}_{v} \mathbf{match} \ v \ \mathbf{with} \ \langle \{\some{l_i: \pi_i}{\mid}{i}{0}{n}\} \Rightarrow e \rangle \expRel \varpi}{R \vdash^{\ell}_{x} \mathbf{match} \ \delta \ \mathbf{with} \ \langle \{\some{l_i: \pi_i}{\mid}{i}{0}{n}\} \Rightarrow e \rangle \expRel \mathbf{match}^{\ell} \ \delta.\{\} \ \mathbf{with} \ \langle v \Rightarrow \varpi \rangle}$$
+$$\frac{v \ \mathbf{fresh} \\ \cdot \vdash^{\ell_e;\ell \mid 0}_{v} \mathbf{match} \ v \ \mathbf{with} \ \langle \{\some{l_i: \pi_i}{\mid}{i}{0}{n}\} \Rightarrow e \rangle \expRel \varpi}{R \vdash^{\ell_e;\ell}_{x} \mathbf{match} \ \delta \ \mathbf{with} \ \langle \{\some{l_i: \pi_i}{\mid}{i}{0}{n}\} \Rightarrow e \rangle \expRel \mathbf{match}^{\ell} \ \delta.\{\} \ \mathbf{with} \ \langle v \Rightarrow \varpi \rangle}$$
 </details>
 <details class = "inner">
 <summary>Prefix Relation of Match IDs<span style="float:right;">{$\ell \prefRel \ell$}</span></summary>
@@ -324,11 +324,11 @@ $$\frac{}{l \ x \ofProp \nvarPat}$$
 <details class = "inner">
 <summary>Match Chain Tagging<span style="float:right;">{$\varpi \tagRel (\mathbb{N}, {}^{\varsigma}\varpi)$}</span></summary>
 
-$$\frac{}{e \tagRel (0, {}^{\varPat}e)}$$
+$$\frac{}{e^{\ell_e} \tagRel (0, {}^{\varPat}e^{\ell_e})}$$
 
-$$\frac{\tilde{\pi} \ofProp \nvarPat}{\mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle \tilde{\pi} \Rightarrow e \rangle \tagRel (0, {}^{\nvarPat}\mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle \tilde{\pi} \Rightarrow {}^{\varPat}e \rangle)}$$
+$$\frac{\tilde{\pi} \ofProp \nvarPat}{\mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle \tilde{\pi} \Rightarrow e^{\ell_e} \rangle \tagRel (0, {}^{\nvarPat}\mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle \tilde{\pi} \Rightarrow {}^{\varPat}e^{\ell_e} \rangle)}$$
 
-$$\frac{\tilde{\pi} \ofProp \varPat}{\mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle \tilde{\pi} \Rightarrow e \rangle \tagRel (\mathbf{size} \ \ell - 1, {}^{\varPat}\mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle \tilde{\pi} \Rightarrow {}^{\varPat}e \rangle)}$$
+$$\frac{\tilde{\pi} \ofProp \varPat}{\mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle \tilde{\pi} \Rightarrow e^{\ell_e} \rangle \tagRel (\mathbf{size} \ \ell - 1, {}^{\varPat}\mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle \tilde{\pi} \Rightarrow {}^{\varPat}e^{\ell_e} \rangle)}$$
 
 $$\frac{\tilde{\pi}_1 \ofProp \nvarPat \\ \mathbf{match}^{\ell_2} \ \delta_2 \ \mathbf{with} \ \langle \tilde{\pi}_2 \Rightarrow \varpi \rangle \tagRel (c, {}^{\varsigma}\varpi_1)}{\mathbf{match}^{\ell_1} \ \delta_1 \ \mathbf{with} \ \langle \tilde{\pi}_1 \Rightarrow \mathbf{match}^{\ell_2} \ \delta_2 \ \mathbf{with} \ \langle \tilde{\pi}_2 \Rightarrow \varpi \rangle \rangle \tagRel \\ (0, {}^{\nvarPat}\mathbf{match}^{\ell_1} \ \delta_1 \ \mathbf{with} \ \langle \tilde{\pi}_1 \Rightarrow {}^{\varsigma}\varpi_1 \rangle)}$$
 
@@ -344,12 +344,12 @@ $$\frac{\tilde{\pi}_1 \ofProp \varPat \\ \mathbf{match}^{\ell_2} \ \delta_2 \ \m
 <summary>Match Chain Grouping<span style="float:right;">{$({}^{\varsigma}\varpi, \varpi) \grpRel \varpi$}</span></summary>
 <details class = "inner">
 <summary>Match Chain Reversing<span style="float:right;">{$(\varpi, \varpi) \revRel \varpi$}</span></summary>
-$$\frac{}{(e, \varpi_{accum}) \revRel \varpi_{accum}}$$
-$$\frac{(\varpi, \mathbf{match} \ \delta \ \mathbf{with} \ \langle \tilde{\pi} \Rightarrow \varpi_{accum} \rangle) \revRel \varpi_1}{(\mathbf{match} \ \delta \ \mathbf{with} \ \langle \tilde{\pi} \Rightarrow \varpi \rangle, \varpi_{accum}) \revRel \varpi_1}$$
+$$\frac{}{(e^{\ell_e}, \varpi_{accum}) \revRel \varpi_{accum}}$$
+$$\frac{(\varpi, \mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle \tilde{\pi} \Rightarrow \varpi_{accum} \rangle) \revRel \varpi_1}{(\mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle \tilde{\pi} \Rightarrow \varpi \rangle, \varpi_{accum}) \revRel \varpi_1}$$
 </details>
-$$\frac{(\varpi_{\varPat}, e) \revRel \varpi}{({}^{\varPat}e, \varpi_{\varPat}) \grpRel \varpi}$$
-$$\frac{({}^{\varsigma}\varpi, \mathbf{match} \ \delta \ \mathbf{with} \ \langle \tilde{\pi} \Rightarrow \varpi_{\varPat} \rangle) \grpRel \varpi_1}{({}^{\varPat}\mathbf{match} \ \delta \ \mathbf{with} \ \langle \tilde{\pi} \Rightarrow {}^{\varsigma}\varpi \rangle, \varpi_{\varPat}) \grpRel \varpi_1}$$
-$$\frac{({}^{\varsigma}\varpi, \varpi_{\varPat}) \grpRel \varpi_1}{({}^{\nvarPat}\mathbf{match} \ \delta \ \mathbf{with} \ \langle \tilde{\pi} \Rightarrow {}^{\varsigma}\varpi \rangle, \varpi_{\varPat}) \grpRel \mathbf{match} \ \delta \ \mathbf{with} \ \langle \tilde{\pi} \Rightarrow \varpi_1 \rangle}$$
+$$\frac{(\varpi_{\varPat}, e^{\ell_e}) \revRel \varpi}{({}^{\varPat}e^{\ell_e}, \varpi_{\varPat}) \grpRel \varpi}$$
+$$\frac{({}^{\varsigma}\varpi, \mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle \tilde{\pi} \Rightarrow \varpi_{\varPat} \rangle) \grpRel \varpi_1}{({}^{\varPat}\mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle \tilde{\pi} \Rightarrow {}^{\varsigma}\varpi \rangle, \varpi_{\varPat}) \grpRel \varpi_1}$$
+$$\frac{({}^{\varsigma}\varpi, \varpi_{\varPat}) \grpRel \varpi_1}{({}^{\nvarPat}\mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle \tilde{\pi} \Rightarrow {}^{\varsigma}\varpi \rangle, \varpi_{\varPat}) \grpRel \mathbf{match}^{\ell} \ \delta \ \mathbf{with} \ \langle \tilde{\pi} \Rightarrow \varpi_1 \rangle}$$
 </details>
 $$\frac{\varpi \tagRel (c, {}^{\varsigma}\varpi_{tagged}) \quad ({}^{\varsigma}\varpi_{tagged}, \{\}) \grpRel \varpi_{sorted}}{\varpi \sortRel \varpi_{sorted}}$$
 </details>
@@ -388,19 +388,23 @@ $$\frac{\keyCond{\mathbf{size} \ \ell_a \sim \mathbf{size} \ \ell_b} \quad \keyC
 
 $$\frac{\keyCond{\mathbf{size} \ \ell_a \sim \mathbf{size} \ \ell_b} \quad \keyCond{\mergeRel{\delta_a}{\delta_b}{\delta'}} \quad \keyCond{\tilde{\pi}_a \ofProp \nvarPat} \quad \keyCond{\tilde{\pi}_b \ofProp \nvarPat}}{\mergeRel{\mathbf{match}^{\ell_a} \ \delta_a \ \mathbf{with} \ \langle\many{\tilde{\pi}_i \Rightarrow \varpi_i}{\mid}{i}{0}{n} \mid \tilde{\pi}_a \Rightarrow \varpi_a \rangle}{\\ \mathbf{match}^{\ell_b} \ \delta_b \ \mathbf{with} \ \langle \tilde{\pi}_b \Rightarrow \varpi_b \rangle}{\\ \mathbf{match}^{\ell_a} \ \delta' \ \mathbf{with} \ \langle\many{\tilde{\pi}_i \Rightarrow \varpi_i}{\mid}{i}{0}{n} \mid \tilde{\pi}_a \Rightarrow \varpi_a \mid \tilde{\pi}_b \Rightarrow \varpi_b \rangle}}$$
 
-$$\frac{\keyCond{\mathbf{size} \ \ell_a \sim \mathbf{size} \ \ell_b} \quad \keyCond{\mergeRel{\delta_a}{\delta_b}{\delta'}} \quad \keyCond{\tilde{\pi}_a \ofProp \varPat} \quad \keyCond{\tilde{\pi}_b \ofProp \nvarPat} \\ (\tilde{\pi}_a \mapsto \tilde{\pi}_b) \pteRel \mathcal{S} \quad \mergeRel{\varpi_a[\mathcal{S}]}{\varpi_b}{\varpi'_b}}{\mergeRel{\mathbf{match}^{\ell_a} \ \delta_a \ \mathbf{with} \ \langle\many{\tilde{\pi}_i \Rightarrow \varpi_i}{\mid}{i}{0}{n} \mid \tilde{\pi}_a \Rightarrow \varpi_a \rangle}{\\ \mathbf{match}^{\ell_b} \ \delta_b \ \mathbf{with} \ \langle \tilde{\pi}_b \Rightarrow \varpi_b \rangle}{\\ \mathbf{match}^{\ell_a} \ \delta' \ \mathbf{with} \ \langle\many{\tilde{\pi}_i \Rightarrow \varpi_i}{\mid}{i}{0}{n} \mid \tilde{\pi}_b \Rightarrow \varpi'_b \mid \tilde{\pi}_a \Rightarrow \varpi_a \rangle}}$$
+$$\frac{\keyCond{\mathbf{size} \ \ell_a \sim \mathbf{size} \ \ell_b} \quad \keyCond{\mergeRel{\delta_a}{\delta_b}{\delta'}} \quad \keyCond{\tilde{\pi}_a \ofProp \varPat} \quad \keyCond{\tilde{\pi}_b \ofProp \nvarPat} \\ (\tilde{\pi}_a \mapsto \tilde{\pi}_b) \pteRel \mathcal{S} \quad \mergeRel{\varpi_a[\mathcal{S}]}{\varpi_b}{\varpi'_a}}{\mergeRel{\mathbf{match}^{\ell_a} \ \delta_a \ \mathbf{with} \ \langle\many{\tilde{\pi}_i \Rightarrow \varpi_i}{\mid}{i}{0}{n} \mid \tilde{\pi}_a \Rightarrow \varpi_a \rangle}{\\ \mathbf{match}^{\ell_b} \ \delta_b \ \mathbf{with} \ \langle \tilde{\pi}_b \Rightarrow \varpi_b \rangle}{\\ \mathbf{match}^{\ell_a} \ \delta' \ \mathbf{with} \ \langle\many{\tilde{\pi}_i \Rightarrow \varpi_i}{\mid}{i}{0}{n} \mid \tilde{\pi}_b \Rightarrow \varpi'_a \mid \tilde{\pi}_a \Rightarrow \varpi_a \rangle}}$$
 
 $$\frac{\keyCond{\mathbf{size} \ \ell_a \sim \mathbf{size} \ \ell_b} \quad \keyCond{\mergeRel{\delta_a}{\delta_b}{\delta'}} \quad \keyCond{\tilde{\pi}_b \ofProp \varPat} \\ \forall \ i \in [0, n], \quad (\tilde{\pi}_b \mapsto \tilde{\pi}_i) \pteRel \mathcal{S}'' \quad \mergeRel{\varpi_i}{(\varpi_b[\mathcal{S}''])}{\varpi''_i}}{\mergeRel{\mathbf{match}^{\ell_a} \ \delta_a \ \mathbf{with} \ \langle\some{\tilde{\pi}_i \Rightarrow \varpi_i}{\mid}{i}{0}{n}\rangle}{\\ \mathbf{match}^{\ell_b} \ \delta_b \ \mathbf{with} \ \langle \tilde{\pi}_b \Rightarrow \varpi_b \rangle}{\\ \mathbf{match}^{\ell_a} \ \delta' \ \mathbf{with} \ \langle\some{\tilde{\pi}_i \Rightarrow \varpi''_i}{\mid}{i}{0}{n} \mid \tilde{\pi}_b \Rightarrow \varpi_b\rangle}}$$
 
 $$\frac{\keyCond{\mathbf{size} \ \ell_a \sim \mathbf{size} \ \ell_b} \quad v \ \mathbf{fresh} \\ \mergeRel{\mathbf{match}^{\ell_a} \ \delta_a \ \mathbf{with} \ \langle\some{\tilde{\pi}_i \Rightarrow \varpi_i}{\mid}{i}{0}{n}\rangle}{\\ \mathbf{match}^{\ell_a} \ \delta_a \ \mathbf{with} \ \langle v \Rightarrow \mathbf{match}^{\ell_b} \ \delta_b \ \mathbf{with} \ \langle \tilde{\pi}_b \Rightarrow \varpi_b \rangle\rangle}{\varpi'}}{\mergeRel{\mathbf{match}^{\ell_a} \ \delta_a \ \mathbf{with} \ \langle\some{\tilde{\pi}_i \Rightarrow \varpi_i}{\mid}{i}{0}{n}\rangle}{\\ \mathbf{match}^{\ell_b} \ \delta_b \ \mathbf{with} \ \langle \tilde{\pi}_b \Rightarrow \varpi_b \rangle}{\varpi'}}$$
 
 $$\frac{v \ \mathbf{fresh} \\ \mergeRel{\mathbf{match}^{\ell_a} \ \delta_a \ \mathbf{with} \ \langle\some{\tilde{\pi}_i \Rightarrow \varpi_i}{\mid}{i}{0}{n}\rangle}{\\ \mathbf{match}^{\ell_a} \ \delta_a \ \mathbf{with} \ \langle v \Rightarrow \varpi_b \rangle}{\varpi'}}{\mergeRel{\mathbf{match}^{\ell_a} \ \delta_a \ \mathbf{with} \ \langle\some{\tilde{\pi}_i \Rightarrow \varpi_i}{\mid}{i}{0}{n}\rangle}{\varpi_b}{\varpi'}}$$
+
+<p style="text-align: center">A match chain merging rule fails if all match chain merging rules in its premises fall back on the following case.</p>
+
+$$\frac{}{\mergeRel{\varpi_a}{\varpi_b}{\varpi_a}}$$
 </details>
-$$\frac{x \ \mathbf{fresh} \\ \cdot \vdash^{0}_{x} \mathbf{match} \ v \ \mathbf{with} \ \langle \pi \Rightarrow e \rangle \expRel \varpi \quad \varpi \sortRel \varpi'}{\mathbf{match} \ v \ \mathbf{with} \ \langle\pi \Rightarrow e \rangle \elabRel \varpi'}$$
+$$\frac{x \ \mathbf{fresh} \\ \cdot \vdash^{\ell_e \mid 0;0}_{x} \mathbf{match} \ v \ \mathbf{with} \ \langle \pi \Rightarrow e \rangle \expRel \varpi \quad \varpi \sortRel \varpi'}{\vdash^{\ell_e} \mathbf{match} \ v \ \mathbf{with} \ \langle\pi \Rightarrow e \rangle \elabRel \varpi'}$$
 
-$$\frac{x \ \mathbf{fresh} \\ \mathbf{match} \ v \ \mathbf{with} \ \langle\some{\pi_i \Rightarrow e_i}{\mid}{i}{0}{n}\rangle \elabRel \mathbf{match}^{n} \ v \ \mathbf{with} \ \langle\some{\tilde{\pi}_j \Rightarrow \varpi_j}{\mid}{j}{0}{m}\rangle \\ \cdot \vdash^{n + 1}_{x} \mathbf{match} \ v \ \mathbf{with} \ \langle \pi \Rightarrow e \rangle \expRel \varpi \quad \varpi \sortRel \varpi' \\ \mergeRel{\mathbf{match}^{n} \ v \ \mathbf{with} \ \langle\some{\tilde{\pi}_j \Rightarrow \varpi_j}{\mid}{j}{0}{m}\rangle}{\varpi'}{\varpi''}}{\mathbf{match} \ v \ \mathbf{with} \ \langle\some{\pi_i \Rightarrow e_i}{\mid}{i}{0}{n} \mid \pi \Rightarrow e \rangle \elabRel \varpi''}$$
+$$\frac{x \ \mathbf{fresh} \\ \vdash^{\ell_e} \mathbf{match} \ v \ \mathbf{with} \ \langle\some{\pi_i \Rightarrow e_i}{\mid}{i}{0}{n}\rangle \elabRel \mathbf{match}^{n} \ v \ \mathbf{with} \ \langle\some{\tilde{\pi}_j \Rightarrow \varpi_j}{\mid}{j}{0}{m}\rangle \\ \cdot \vdash^{\ell_e \mid (n + 1);n + 1}_{x} \mathbf{match} \ v \ \mathbf{with} \ \langle \pi \Rightarrow e \rangle \expRel \varpi \quad \varpi \sortRel \varpi' \\ \mergeRel{\mathbf{match}^{n} \ v \ \mathbf{with} \ \langle\some{\tilde{\pi}_j \Rightarrow \varpi_j}{\mid}{j}{0}{m}\rangle}{\varpi'}{\varpi''}}{\vdash^{\ell_e} \mathbf{match} \ v \ \mathbf{with} \ \langle\some{\pi_i \Rightarrow e_i}{\mid}{i}{0}{n} \mid \pi \Rightarrow e \rangle \elabRel \varpi''}$$
 
-$$\frac{v \ \mathbf{fresh} \\ \mathbf{match} \ v \ \mathbf{with} \ \langle\some{\pi_i \Rightarrow e_i}{\mid}{i}{0}{n}\rangle \elabRel \mathbf{match}^{\ell} \ v \ \mathbf{with} \ \langle\some{\tilde{\pi}_j \Rightarrow \varpi_j}{\mid}{j}{0}{m}\rangle}{\mathbf{match} \ e \ \mathbf{with} \ \langle\some{\pi_i \Rightarrow e_i}{\mid}{i}{0}{n}\rangle \elabRel \mathbf{match}^{\ell} \ e \ \mathbf{with} \ \langle\some{\tilde{\pi}_j \Rightarrow \varpi_j}{\mid}{j}{0}{m}\rangle}$$
+$$\frac{v \ \mathbf{fresh} \\ \vdash^{\ell_e} \mathbf{match} \ v \ \mathbf{with} \ \langle\some{\pi_i \Rightarrow e_i}{\mid}{i}{0}{n}\rangle \elabRel \mathbf{match}^{\ell} \ v \ \mathbf{with} \ \langle\some{\tilde{\pi}_j \Rightarrow \varpi_j}{\mid}{j}{0}{m}\rangle}{\vdash^{\ell_e} \mathbf{match} \ e \ \mathbf{with} \ \langle\some{\pi_i \Rightarrow e_i}{\mid}{i}{0}{n}\rangle \elabRel \mathbf{match}^{\ell} \ e \ \mathbf{with} \ \langle\some{\tilde{\pi}_j \Rightarrow \varpi_j}{\mid}{j}{0}{m}\rangle}$$
 </details>
 
 <details>
@@ -421,7 +425,15 @@ $$\frac{\Delta;\Gamma \vdash e: \langle\cdot\rangle}{\Delta;\Gamma \vdash \mathb
 
 $$\frac{\Delta;\Gamma \vdash e: \langle\rho\rangle \\ \forall i \in [0, n], \\ \quad \Delta;\Gamma;\cdot \ptWith \pi_i : \tau_i \ptRel \Delta_i;\Gamma_i;\Theta_i \\ \quad \Delta_i \vdash \tau_i[\mathcal{I}_i] \sim \langle\rho\rangle \\ \quad \Delta_i;\Gamma_i[\mathcal{I_i}] \vdash e_i: \tau}{\Delta;\Gamma \vdash \mathbf{match} \ e \ \mathbf{with} \ \langle\some{\pi_i \Rightarrow e_i}{\mid}{i}{0}{n}\rangle : \tau} \ \ruleName{SimpleMatch}$$
 
-$$\frac{\Delta;\Gamma \vdash e: \langle\rho\rangle \\ \forall i \in [0, n], \\ \quad \Delta;\Gamma;\cdot \ptWith \pi_i : \langle\rho_i\rangle \ptRel \Delta_i;\Gamma_i;\Theta_i \\ \quad \Delta_i \vdash \rho_i[\mathcal{I}_i] \sim \rho \\ \quad \Delta_i;\Gamma_i[\mathcal{I_i}] \vdash e_i: \tau}{\Delta;\Gamma \vdash \mathbf{match} \ e \ \mathbf{with} \ \langle\some{\pi_i \Rightarrow e_i}{\mid}{i}{0}{n}\rangle : \tau} \ \ruleName{Match}$$
+$$\frac{\Delta;\Gamma \vdash e : \tau \\ \many{\alpha_i}{}{i}{0}{m} = \mathbf{ftv}(\tau) - \mathbf{ftv}(\Gamma) \\ \many{\beta_j}{}{j}{0}{n} = \mathbf{frv}(\tau) - \mathbf{frv}(\Gamma) \\ \forall \ j \in [0, n], \kappa_j = \Delta(\beta_j)}{\Delta;\Gamma \vdash^{gen} e: \forall \ \many{\alpha_i}{}{i}{0}{m} \ \many{[\beta_j : \kappa_j]}{}{j}{0}{n}.\tau}\ \ruleName{Gen}$$
+
+$$\frac{\Delta;\Gamma \vdash^{gen} e: \forall \ \many{\alpha_i}{}{i}{0}{m} \ \many{[\beta_j : \kappa_j]}{}{j}{0}{n}.\tau}{\Delta;\Gamma \vdash^{match} e: (\forall \ \many{\alpha_i}{}{i}{0}{m} \ \many{[\beta_j : \kappa_j]}{}{j}{0}{n}.\tau) \many{\ \langle \cdot \rangle}{}{i}{0}{m} \ \many{[\cdot]}{}{j}{0}{n}} \ \ruleName{MatchInst}$$
+
+$$\frac{\Delta;\Gamma;\cdot \ptWith l : \tau_p \ptRel \Delta_p;\Gamma_p;\Theta \\ \Delta_p \vdash \tau_p[\mathcal{I}] \sim \tau \\ \Delta_p;\Gamma_p[\mathcal{I}] \vdash rhs: \tau_{rhs}}{\Delta;\Gamma \vDash^{\langle l: \{\cdot\} \mid \rho \rangle} \mathbf{match} \ e \ \mathbf{with} \ \langle l \Rightarrow rhs\rangle : \tau_{rhs} \dashv \langle \cdot \rangle} \ \ruleName{Match}$$
+
+$$\frac{\Delta;\Gamma \vdash^{match} e: \tau \\ \Delta;\Gamma;\cdot \ptWith x : \tau_p \ptRel \Delta_p;\Gamma_p;\Theta \\ \Delta_p \vdash \tau_p[\mathcal{I}] \sim \tau \\ \Delta_p;\Gamma_p[\mathcal{I}] \vdash rhs: \tau_{rhs}}{\Delta;\Gamma \vdash \mathbf{match} \ e \ \mathbf{with} \ \langle x \Rightarrow rhs\rangle : \tau_{rhs}} \ \ruleName{Match}$$
+
+
 </details>
 
 <hr class = "split">
