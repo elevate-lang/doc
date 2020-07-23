@@ -23,42 +23,45 @@ type PatternProperty = Bool
 data MatchChain = RHSTerm MatchId Term | MatchChain MatchId Term [(Pattern, MatchChain)] deriving (Show, Eq, Ord)
     
 {- Take a match term and expand it into match chain -}
-patternExpansion :: Term -> [MatchChain]
-patternExpansion t = case t of
+patternExpansion :: Term -> Natural -> [MatchChain]
+patternExpansion t n = case t of
   Match exp list -> case list of
     [] -> []
-    ((p, t) : xs) -> (patternCases exp 0 p t) : (patternExpansion (Match exp xs))
+    ((p, t) : xs) -> (patternCases exp n p t) : (patternExpansion (Match exp xs) (n + 1))
   _ -> []
 
+{- Five cases of the pattern expansion -}
 patternCases :: Term -> Natural -> Pattern -> Term -> MatchChain
 patternCases exp n (IdPattern id) rhsTerm = MatchChain [n] exp [((IdPattern id), (RHSTerm [n] rhsTerm))]
 patternCases exp n (LabelPattern label) rhsTerm = MatchChain [n] exp [((LabelPattern label), (RHSTerm [n] rhsTerm))]
-patternCases exp n MatchAllPattern rhsTerm = MatchChain [n] (FieldAccess exp ("{}")) [((IdPattern "#fresh"), (RHSTerm [n] rhsTerm))]
-patternCases exp n (AppPattern label pattern) rhsTerm = MatchChain [n] exp [((AppPattern label (IdPattern "#fresh")), (patternCases (TermId "#fresh") n pattern rhsTerm))]
-patternCases exp n (RecordPattern patterns) rhsTerm = recordExpansion patterns (IdPattern "#fresh") "fresh" rhsTerm (toNatural (length patterns)) (MatchChain [n] (RecordMod exp []) [])
+patternCases exp n MatchAllPattern rhsTerm = MatchChain [n] (FieldAccess exp ("{}")) [((IdPattern (fresh [n])), (RHSTerm [n] rhsTerm))]
+patternCases exp n (AppPattern label pattern) rhsTerm = MatchChain [n] exp [((AppPattern label (IdPattern (fresh [n]))), (patternCases (TermId (fresh [n])) n pattern rhsTerm))]
+patternCases exp n (RecordPattern patterns) rhsTerm = MatchChain [n] (RecordMod exp []) [((IdPattern (fresh [n])), (recordExpansionList (preorder patterns (TermId (fresh [n]), True) [n] 0) n rhsTerm))]
 
-{- Further expand record patterns -}
--- TODO, revisit the match id in nested record patterns
-recordExpansion :: [(Label, Pattern)] -> Pattern -> Id -> Term -> Natural -> MatchChain -> MatchChain
-recordExpansion [] prevP id t n chain = chain
-recordExpansion (x : xs) prevP id t n chain = case x of
-  (l, RecordPattern patterns) -> 
-    chain
-    -- (MatchChain [(n - (toNatural (length xs)) - 1)] (FieldAccess (Label (fresh (length [(n - (toNatural (length xs)) - 1)]))) l) (pair (IdPattern "chain") (recordExpansion patterns t (toNatural (length patterns))))) : (recordExpansion xs t n)
-  (l, p) -> case xs of
-    [] -> 
-        addToMatchChain chain (prevP, MatchChain [(n - (toNatural (length xs)) - 1)] (FieldAccess (TermId id) l) [(p, RHSTerm [(n - (toNatural (length xs)) - 1)] t)])
-    xss ->
-      addToMatchChain chain (prevP, (recordExpansion xs p id t n (MatchChain [(n - (toNatural (length xs)) - 1)] (FieldAccess (TermId id) l) [])))
+{- Expand the flatten record into a match chain -}
+recordExpansionList :: [((Term, Bool), Label, Pattern, MatchId)] -> Natural -> Term -> MatchChain
+recordExpansionList [] n rhsTerm = (RHSTerm [n] rhsTerm)
+recordExpansionList (((t, isRecord), l, p, matchId) : xs) n rhsTerm = case t of
+  RecordMod tt ll -> MatchChain matchId (RecordMod tt ll) [(p, (recordExpansionList xs n rhsTerm))]
+  _ -> case isRecord of
+    True -> MatchChain matchId (FieldAccess t l) [(p, (recordExpansionList xs n rhsTerm))]
+    False -> MatchChain matchId t [((AppPattern l p), (recordExpansionList xs n rhsTerm))]
 
-addToMatchChain :: MatchChain -> (Pattern, MatchChain) -> MatchChain
-addToMatchChain (RHSTerm id t) pair = RHSTerm id t
-addToMatchChain (MatchChain id t list) pair =  MatchChain id t (list ++ [pair])
-
+{- Flatten a record list -}
+preorder :: [(Label, Pattern)] -> (Term, Bool) -> MatchId -> Natural -> [((Term, Bool), Label, Pattern, MatchId)]
+preorder [] (parentTerm, isRecord) matchId n = []
+preorder (x : xs) (parentTerm, isRecord) matchId n = case x of
+  (l, RecordPattern patterns) -> ((RecordMod parentTerm [], isRecord), l, (IdPattern (fresh (matchId ++ [n]))), (matchId ++ [n])) : (preorder patterns ((TermId (fresh (matchId ++ [n]))), True) (matchId ++ [n, 0]) 0) ++ (preorder xs (parentTerm, True) matchId (n + 1))
+  (l, AppPattern label pattern) -> case pattern of 
+    RecordPattern pps -> ((parentTerm, isRecord), l, (AppPattern label (IdPattern (fresh (matchId ++ [n])))), (matchId ++ [n])) : ((RecordMod (TermId (fresh (matchId ++ [n]))) [], False), l, (IdPattern (fresh (matchId ++ [n, 0]))), (matchId ++ [n, 0])) : (preorder pps ((TermId (fresh (matchId ++ [n, 0]))), True) (matchId ++ [n, 0]) 0) ++ (preorder xs (parentTerm, True) matchId (n + 1))
+    AppPattern ll pp -> ((parentTerm, isRecord), l, (AppPattern label (IdPattern (fresh (matchId ++ [n])))), (matchId ++ [n])) : (preorder [(ll, pp)] ((TermId (fresh (matchId ++ [n]))), False) (matchId ++ [n]) 0) ++ (preorder xs (parentTerm, True) matchId (n + 1))
+    p -> ((parentTerm, isRecord), l, (AppPattern label (IdPattern (fresh (matchId ++ [n])))), (matchId ++ [n])) : [(((TermId (fresh (matchId ++ [n]))), False), label, p, matchId ++ [n, 0])] ++ (preorder xs (parentTerm, True) matchId (n + 1))
+  (l, p) -> ((parentTerm, isRecord), l, p, (matchId ++ [n]) ) : (preorder xs (parentTerm, isRecord) matchId (n + 1) )
 
 {- Introduce a fresh variable -}
-fresh :: Int -> String
-fresh n = "#fresh" ++ (show (n - 1))
+-- TODO use state monad, current it is build using matchId
+fresh :: [Natural] -> String
+fresh xs = foldl (++) "#fresh" (map show xs)
 
 -- helper functions
 toNatural :: Int -> Natural
@@ -67,7 +70,6 @@ toNatural a = (fromInteger (toInteger a)) :: Natural
 pair :: Pattern -> [MatchChain] -> [(Pattern, Either Term MatchChain)]
 pair p [] = []
 pair p (x : xs) = (p, Right x) : (pair p xs)
-
 
 {- takes a Term, processes the Match Term, results in a Term-}
 patternElaboration :: Term -> Term
