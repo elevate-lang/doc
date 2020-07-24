@@ -22,6 +22,10 @@ dependencies:
 - parsec
 - containers
 - raw-strings-qq
+- vec
+- fin
+- ListLike
+- mtl
 
 library:
   source-dirs: src

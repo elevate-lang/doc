@@ -1,6 +1,6 @@
-{-# LANGUAGE TupleSections, QuasiQuotes, TemplateHaskell #-}
-{-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable #-}
-{-# LANGUAGE DataKinds, GADTs, KindSignatures #-}
+{-# LANGUAGE TupleSections, QuasiQuotes, TemplateHaskell, StandaloneDeriving #-}
+{-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable, FlexibleContexts, FlexibleInstances #-}
+{-# LANGUAGE DataKinds, GADTs, KindSignatures, PolyKinds, LiberalTypeSynonyms #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
@@ -14,6 +14,13 @@ import Data.Maybe
 import Data.Either
 import Numeric.Natural
 import Text.RawString.QQ
+import qualified Data.Vec.Lazy as VL
+import Data.Type.Nat
+import Data.Set as Set
+import Control.Monad
+import Control.Monad.Reader
+import Control.Monad.State
+import Control.Arrow
 
 type MatchId = [Natural]
 
@@ -21,7 +28,70 @@ type PatternProperty = Bool
 
 {- MatchChain := term l | match l exp with [...] -}
 data MatchChain = RHSTerm MatchId Term | MatchChain MatchId Term [(Pattern, MatchChain)] deriving (Show, Eq, Ord)
-    
+
+data MatchChainModel = List | Tree
+
+newtype Fix (f :: k -> * -> *) (p :: k) = Roll {unroll :: f p (Fix f p)}
+
+type Algebra f a = f a -> a
+
+catap :: (Functor (f p)) => Algebra (f p) a -> Fix f p -> a
+catap f = unroll >>> fmap (catap f) >>> f
+
+instance Show (Fix MatchChain' m) where
+  show = catap alg
+    where alg :: Algebra (MatchChain' m) String 
+          alg (RHSTerm' mid e) = "RHS " ++ show mid ++ " " ++ show e
+          alg (MatchChainList mid e (p, rest)) = 
+            "List " ++ show mid ++ " " ++ show e ++ " " ++ show p ++ " " ++ rest
+          alg (MatchChainTree mid e v) = "Tree " ++ show mid ++ ""
+
+data MatchChain' :: MatchChainModel -> * -> * where
+  RHSTerm' :: MatchId -> Term -> MatchChain' m self
+  MatchChainList :: MatchId -> Term -> (Pattern, self) -> MatchChain' List self
+  MatchChainTree :: MatchId -> Term -> VL.Vec (S n) (Pattern, self) -> MatchChain' Tree self
+
+deriving instance (Show self) => Show (MatchChain' m self)
+
+deriving instance Functor (MatchChain' m)
+
+type MatchChainList = Fix MatchChain' List
+
+type MatchChainTree = Fix MatchChain' Tree
+
+data TaggedMatchChainList' m self = Up (MatchChain' m self) | Down (MatchChain' m self)
+
+type TaggedMatchChainList = Fix TaggedMatchChainList' List
+
+type Context = (Set.Set Label, (MatchId, MatchId), Int)
+
+getFreshNameId :: (MonadState Context m) => m Int
+getFreshNameId = do
+  (_, _, n) <- get
+  return n
+
+getIds :: (MonadState Context m) => m (MatchId, MatchId)
+getIds = do
+  (_, ids, _) <- get
+  return ids
+
+patternExp :: (
+  MonadState Context m,
+  MonadReader Id m
+  ) => Term -> Pattern -> Term -> m MatchChainList
+patternExp e MatchAllPattern rhs = do
+  n <- getFreshNameId
+  let freshName = "#a" ++ show (n :: Int)
+  (le, l) <- getIds
+  return . Roll $ MatchChainList l e (IdPattern freshName, Roll $ RHSTerm' le rhs)
+patternExp _ _ _ = undefined
+
+--testPtExp :: ReaderT Id (StateT (Set.Set Label) (StateT (MatchId, MatchId) (State Int))) MatchChainList
+--testPtExp = patternExp (TermId "n") MatchAllPattern (TermId "rhs")
+
+testExp = flip evalState (Set.empty, ([0], [5]), 10) . flip runReaderT "" $ patternExp (TermId "n") MatchAllPattern (TermId "rhs")
+
+--mapMatchChain' :: (MatchId -> Term -> Pattern -> a) -> MatchChain' List -> 
 {- Take a match term and expand it into match chain -}
 patternExpansion :: Term -> Natural -> [MatchChain]
 patternExpansion t n = case t of
@@ -61,7 +131,7 @@ preorder (x : xs) (parentTerm, isRecord) matchId n = case x of
 {- Introduce a fresh variable -}
 -- TODO use state monad, current it is build using matchId
 fresh :: [Natural] -> String
-fresh xs = foldl (++) "#fresh" (map show xs)
+fresh xs = undefined --foldl (++) "#fresh" (map show xs)
 
 -- helper functions
 toNatural :: Int -> Natural
