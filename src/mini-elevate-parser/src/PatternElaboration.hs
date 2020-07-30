@@ -107,6 +107,8 @@ patternExpansion :: (
 patternExpansion delta MatchAllPattern e = do
   n <- getFreshNameId
   let freshName = "#a" ++ show (n :: Int)
+  -- update fresh name counter
+  setFreshNameId (n + 1)
   (le, l) <- getIds
   return . Roll $ MatchChainList l delta (IdPattern freshName, Roll $ RHSTerm le e)
 -- Match variable
@@ -127,6 +129,8 @@ patternExpansion delta (AppPattern label pattern) e = case pattern of
   _ -> do
     n <- getFreshNameId
     let freshName = "#a" ++ show (n :: Int)
+    -- update fresh name counter
+    setFreshNameId (n + 1)
     (le, l) <- getIds
     let l' = l ++ [0]
     setIds (le, l')
@@ -138,6 +142,8 @@ patternExpansion delta (RecordPattern list) e = case list of
   [] -> do
     n <- getFreshNameId
     let freshName = "#a" ++ show (n :: Int)
+    -- update fresh name counter
+    setFreshNameId (n + 1)
     (le, l) <- getIds
     return . Roll $ MatchChainList l (RecordMod delta []) (IdPattern freshName,  Roll $ RHSTerm le e)
   ((label, pattern) : xs) -> case delta of 
@@ -145,9 +151,15 @@ patternExpansion delta (RecordPattern list) e = case list of
       [] -> do
         labelSet <- getLabels
         -- TODO check if label is in label set
+        let newlabelSet = insert label labelSet
+        setLabels labelSet
         chain <- patternExpansion (FieldAccess (TermId v) label) pattern e
         return chain
       _ -> do
+        labelSet <- getLabels
+        -- TODO check if label is in label set
+        let newlabelSet = insert label labelSet
+        setLabels labelSet
         let tempTermId = "temp"
         chain2 <- patternExpansion (FieldAccess (TermId v) label) pattern (TermId tempTermId)
         (le, l) <- getIds
@@ -158,6 +170,8 @@ patternExpansion delta (RecordPattern list) e = case list of
     _ -> do
       n <- getFreshNameId
       let freshName = "#a" ++ show (n :: Int)
+      -- update fresh name counter
+      setFreshNameId (n + 1)
       (le, l) <- getIds
       let l' = l ++ [0]
       setIds (le, l')
