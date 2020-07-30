@@ -87,6 +87,17 @@ setIds newids = do
   put (labels, newids, n)
   return newids
 
+getLabels :: (MonadState Context m) => m (Set.Set Label)
+getLabels = do 
+  (labels, _, _) <- get
+  return labels
+
+setLabels :: (MonadState Context m) => (Set.Set Label)-> m (Set.Set Label)
+setLabels newlabels = do
+  (_, ids, n) <- get
+  put (newlabels, ids, n)
+  return newlabels
+
 -- The result will always be a match chain list model
 patternExpansion :: (
   MonadState Context m,
@@ -102,15 +113,17 @@ patternExpansion delta MatchAllPattern e = do
 patternExpansion delta (IdPattern v) e = do
   (le, l) <- getIds
   return . Roll $ MatchChainList l delta (IdPattern v, Roll $ RHSTerm le e)
--- Match lables
+-- Match label
 patternExpansion delta (LabelPattern label) e = do
   (le, l) <- getIds
   return . Roll $ MatchChainList l delta (LabelPattern label, Roll $ RHSTerm le e)
 -- Match app
 patternExpansion delta (AppPattern label pattern) e = case pattern of
+  -- Match label variable (l v)
   (IdPattern v) -> do
     (le, l) <- getIds
     return . Roll $ MatchChainList l delta (AppPattern label (IdPattern v),  Roll $ RHSTerm le e)
+  -- Match label pattern (l pi)
   _ -> do
     n <- getFreshNameId
     let freshName = "#a" ++ show (n :: Int)
@@ -130,6 +143,8 @@ patternExpansion delta (RecordPattern list) e = case list of
   ((label, pattern) : xs) -> case delta of 
     (TermId v) -> case xs of
       [] -> do
+        labelSet <- getLabels
+        -- TODO check if label is in label set
         chain <- patternExpansion (FieldAccess (TermId v) label) pattern e
         return chain
       _ -> do
@@ -139,7 +154,7 @@ patternExpansion delta (RecordPattern list) e = case list of
         let l' = (Prelude.take (length l - 1) l) ++ [(last l + 1)]
         setIds (le, l')
         chain1 <- patternExpansion (TermId v) (RecordPattern xs) e
-        return chain2
+        return (replaceTail chain2 chain1)
     _ -> do
       n <- getFreshNameId
       let freshName = "#a" ++ show (n :: Int)
@@ -150,7 +165,11 @@ patternExpansion delta (RecordPattern list) e = case list of
       return . Roll $ MatchChainList l (RecordMod delta []) (IdPattern freshName, chain)
 
 replaceTail :: MatchChainList -> MatchChainList -> MatchChainList
-replaceTail a b = a
+replaceTail a b = 
+  let (MatchChainList l delta (pattern, rhs)) = unroll a
+  in case (unroll rhs) of
+    (RHSTerm mid e) -> Roll (MatchChainList l delta (pattern, b))
+    _ -> Roll (MatchChainList l delta (pattern, (replaceTail rhs b))) 
 
 --testPtExp :: ReaderT Id (StateT (Set.Set Label) (StateT (MatchId, MatchId) (State Int))) MatchChainList
 --testPtExp = patternExpansion (TermId "n") MatchAllPattern (TermId "rhs")
@@ -183,5 +202,5 @@ matchString = [r|match exp with <
   {Trd: T} => 4
 >|]
 
--- matchExample = testRun match matchString
-matchExample = (Match (TermId "x") [(AppPattern "App" (RecordPattern [("Fun",AppPattern "App" (RecordPattern [("Fun",AppPattern "Primitive" (LabelPattern "Map")),("Arg",IdPattern "f")])),("Arg",AppPattern "App" (RecordPattern [("Fun",AppPattern "App" (RecordPattern [("Fun",AppPattern "Primitive" (LabelPattern "Map")),("Arg",IdPattern "g")])),("Arg",IdPattern "x")]))]),App (Label "Success") (App (Label "App") (RecordCons [("Fun",App (Label "App") (RecordCons [("Fun",App (Label "Primitive") (Label "Map")),("Arg",App (Label "Lam") (RecordCons [("Param",App (Label "0") (RecordCons [])),("Body",App (Label "App") (RecordCons [("Fun",TermId "f"),("Arg",App (Label "App") (RecordCons [("Fun",TermId "g"),("Arg",App (Label "Id") (RecordCons [("Name",App (Label "0") (RecordCons []))]))]))]))]))])),("Arg",TermId "x")]))),(MatchAllPattern,App (Label "Failure") (App (Label "1") (RecordCons [])))]) 
+matchExample = Match (TermId "exp") [(RecordPattern [("Snd",LabelPattern "F"),("Trd",LabelPattern "T")],App (Label "1") (RecordCons [])),(RecordPattern [("Fst",LabelPattern "F"),("Snd",LabelPattern "T")],App (Label "2") (RecordCons [])),(RecordPattern [("Trd",LabelPattern "F")],App (Label "3") (RecordCons [])),(RecordPattern [("Trd",LabelPattern "T")],App (Label "4") (RecordCons []))]-- testRun match matchString
+matchFusionExample = (Match (TermId "x") [(AppPattern "App" (RecordPattern [("Fun",AppPattern "App" (RecordPattern [("Fun",AppPattern "Primitive" (LabelPattern "Map")),("Arg",IdPattern "f")])),("Arg",AppPattern "App" (RecordPattern [("Fun",AppPattern "App" (RecordPattern [("Fun",AppPattern "Primitive" (LabelPattern "Map")),("Arg",IdPattern "g")])),("Arg",IdPattern "x")]))]),App (Label "Success") (App (Label "App") (RecordCons [("Fun",App (Label "App") (RecordCons [("Fun",App (Label "Primitive") (Label "Map")),("Arg",App (Label "Lam") (RecordCons [("Param",App (Label "0") (RecordCons [])),("Body",App (Label "App") (RecordCons [("Fun",TermId "f"),("Arg",App (Label "App") (RecordCons [("Fun",TermId "g"),("Arg",App (Label "Id") (RecordCons [("Name",App (Label "0") (RecordCons []))]))]))]))]))])),("Arg",TermId "x")]))),(MatchAllPattern,App (Label "Failure") (App (Label "1") (RecordCons [])))]) 
