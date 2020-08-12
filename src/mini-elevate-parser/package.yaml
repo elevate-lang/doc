@@ -26,6 +26,9 @@ dependencies:
 - fin
 - ListLike
 - mtl
+- recursion-schemes
+- data-fix
+- compdata
 
 library:
   source-dirs: src
@@ -38,6 +41,7 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -ddump-splices
     dependencies:
     - mini-elevate-parser
 
