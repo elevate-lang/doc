@@ -29,6 +29,7 @@ dependencies:
 - recursion-schemes
 - data-fix
 - compdata
+- transformers
 
 library:
   source-dirs: src

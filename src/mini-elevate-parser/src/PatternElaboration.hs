@@ -15,7 +15,7 @@ import Numeric.Natural
 import Text.RawString.QQ
 import qualified Data.Vec.Lazy as VL
 import Data.Type.Nat hiding (toNatural)
-import Data.Set as Set
+import qualified Data.Set as Set
 import Control.Monad
 import Control.Monad.Reader
 import Control.Monad.State
@@ -33,6 +33,7 @@ import Data.Comp.Multi.Ops
 import Data.Comp.Multi.Term
 import Data.Functor.Compose
 import Data.Comp.Multi.Projection
+import Parser
 
 data AccessForm = IAccess Id | IFAccess Id Label | IFRAccess Id Label | IRAccess Id deriving (Eq, Ord, Show)
 
@@ -148,7 +149,14 @@ lCase x f = case project x :: Maybe (f (Fix g) i) of
   Nothing -> Nothing
 
 runCase :: [Maybe a] -> a
-runCase ls = head $ [x | Just x <- ls]
+runCase ls = case [x | Just x <- ls] of
+  (a : _) -> a
+  _ -> error "Unexpected Case"
+
+runCaseOn :: a -> [a -> Maybe b] -> b
+runCaseOn a = runCase . map ($ a)
+
+-- (Int, [(PatProp, TaggedMatchChainSig e SimplePatSig SimplePat (K ()) ListModel)])
 
 patExpansion :: (MonadState PEState m, MonadReader (PERead e) m) =>
   AccessForm -> Fix ComplexPatSig ComplexPat -> m (Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel)
@@ -208,7 +216,7 @@ patExpansion delta p = runCase [
           [] -> do
             labelSet <- getLabels
             -- TODO check if label is in label set
-            let newlabelSet = insert label labelSet
+            let newlabelSet = Set.insert label labelSet
             setLabels labelSet
             (_, rhs) <- ask
             chain <- patExpansion (IFAccess v label) pattern
@@ -216,7 +224,7 @@ patExpansion delta p = runCase [
           _ -> do
             labelSet <- getLabels
             -- TODO check if label is in label set
-            let newlabelSet = insert label labelSet
+            let newlabelSet = Set.insert label labelSet
             setLabels labelSet
             chain2 <- patExpansion (IFRAccess v label) pattern
             (le, l) <- getIds

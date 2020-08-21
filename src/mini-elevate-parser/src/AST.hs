@@ -512,7 +512,7 @@ instance ShowHF (LabelExpr a_a2zX) where
     = (K $ (showConstr
               "LabelApp")
               [show x_aajq, unK x_aajr])
-
+{-
 data RowRep :: (* -> *) -> * -> * where
   RowRep :: Map.Map Label (t TypeKind) -> Maybe Id -> RowRep t RowKind
 
@@ -535,3 +535,4 @@ instance ShowHF RowRep where
     = (K $ (showConstr
               "RowRep")
               [show (Map.map unK x_afYQ), show x_afYR])
+-}
