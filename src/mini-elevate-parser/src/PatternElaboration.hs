@@ -35,8 +35,6 @@ import Data.Functor.Compose
 import Data.Comp.Multi.Projection
 import Parser
 
-import Parser
-
 data AccessForm = IAccess Id | IFAccess Id Label | IFRAccess Id Label | IRAccess Id deriving (Eq, Ord, Show)
 
 toRAccess :: AccessForm -> AccessForm
@@ -88,8 +86,9 @@ type MatchChainSig e p l = RHSExpr e :+: MatchChain p l
 
 data PatProp = NonVar | Var
 
--- used form (RHSExpr e :&: (RHSId, PatProp))) instead of RHSExpr e :&: RHSId :&: PatProp) to prevent confusing the smart constructor
-type TaggedMatchChainSig e p l = (RHSExpr e :&: (RHSId, PatProp)) :+: (MatchChain p l :&: (MatchId, PatProp))
+type TaggedMatchChainSig e p l = (RHSExpr e :&: RHSId) :+: (MatchChain p l :&: MatchId)
+
+type JudgedMatchChain e = (Int, [(PatProp, TaggedMatchChainSig e SimplePatSig SimplePat (K ()) ListModel)])
 
 $(derive [makeHFunctor, makeHFoldable, makeHTraversable][''MatchChain, ''RHSExpr])
 
@@ -172,17 +171,17 @@ patExpansion delta p = runCase [
       setFreshNameId (n + 1)
       (le, l) <- getIds
       (_, e) <- ask
-      return $ iAMatchChainList (l, Var) delta (iIdPat freshName :: Fix SimplePatSig SimplePat, iARHSExpr (le, Var) e)
+      return $ iAMatchChainList l delta (iIdPat freshName :: Fix SimplePatSig SimplePat, iARHSExpr le e)
   ),
   patCase @Pat p (\case
     IdPat v -> do
       (le, l) <- getIds
       (_, rhs) <- ask
-      return $ iAMatchChainList (l, Var) delta (iIdPat v :: Fix SimplePatSig SimplePat, iARHSExpr (le, Var) rhs)
+      return $ iAMatchChainList l delta (iIdPat v :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
     LabelPat label -> do
       (le, l) <- getIds
       (_, rhs) <- ask
-      return $ iAMatchChainList (l, NonVar) delta (iLabelPat label :: Fix SimplePatSig SimplePat, iARHSExpr (le, Var) rhs)
+      return $ iAMatchChainList l delta (iLabelPat label :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
   ),
   patCase @AppPat p (\case
     AppPat label p -> 
@@ -191,7 +190,7 @@ patExpansion delta p = runCase [
         IdPat v -> do
           (le, l) <- getIds
           (_, rhs) <- ask
-          return $ iAMatchChainList (l, NonVar) delta (iAppIdPat label v :: Fix SimplePatSig SimplePat, iARHSExpr (le, Var) rhs)
+          return $ iAMatchChainList l delta (iAppIdPat label v :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
         -- l pi
         _ -> do
           n <- getFreshNameId
@@ -202,7 +201,7 @@ patExpansion delta p = runCase [
           let l' = l ++ [0]
           setIds (le, l')
           chain <- patExpansion (IAccess freshName) p
-          return $ iAMatchChainList (l, NonVar) delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, chain)
+          return $ iAMatchChainList l delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, chain)
       ), patCase @MatchAllPat p (\case
         -- l MatchAllPat
         _ -> do
@@ -212,7 +211,7 @@ patExpansion delta p = runCase [
           setFreshNameId (n + 1)
           (le, l) <- getIds
           (_, rhs) <- ask
-          return $ iAMatchChainList (l, NonVar) delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, iARHSExpr (le, Var) rhs)
+          return $ iAMatchChainList l delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
       )]
   ),
   patCase @RecordPat p (\case
@@ -225,28 +224,34 @@ patExpansion delta p = runCase [
         setFreshNameId (n + 1)
         (le, l) <- getIds
         (_, rhs) <- ask
-        return $ iAMatchChainList (l, Var) (toRAccess delta) (iIdPat freshName :: Fix SimplePatSig SimplePat, iARHSExpr (le, Var) rhs)
+        return $ iAMatchChainList l (toRAccess delta) (iIdPat freshName :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
       ((label, pattern) : xs) -> case delta of 
         (IAccess v) -> case xs of
           [] -> do
             labelSet <- getLabels
-            -- TODO check if label is in label set
-            let newlabelSet = Set.insert label labelSet
-            setLabels newlabelSet
-            (_, rhs) <- ask
-            chain <- patExpansion (IFAccess v label) pattern
-            return chain
+            -- check if label is in label set
+            if Set.member label labelSet
+              then fail "Error: label duplication"
+              else do
+                let newlabelSet = Set.insert label labelSet
+                setLabels newlabelSet
+                (_, rhs) <- ask
+                chain <- patExpansion (IFAccess v label) pattern
+                return chain
           _ -> do
             labelSet <- getLabels
-            -- TODO check if label is in label set
-            let newlabelSet = Set.insert label labelSet
-            setLabels newlabelSet
-            chain2 <- patExpansion (IFRAccess v label) pattern
-            (le, l) <- getIds
-            let l' = (Prelude.take (length l - 1) l) ++ [(last l + 1)]
-            setIds (le, l')
-            chain1 <- patExpansion (IAccess v) (iRecordPat xs)
-            return (replaceTail chain2 chain1)
+            -- check if label is in label set
+            if Set.member label labelSet
+              then fail "Error: label duplication"
+              else do
+                let newlabelSet = Set.insert label labelSet
+                setLabels newlabelSet
+                chain2 <- patExpansion (IFRAccess v label) pattern
+                (le, l) <- getIds
+                let l' = (Prelude.take (length l - 1) l) ++ [(last l + 1)]
+                setIds (le, l')
+                chain1 <- patExpansion (IAccess v) (iRecordPat xs)
+                return (replaceTail chain2 chain1)
         _ -> do
           n <- getFreshNameId
           let freshName = "#a" ++ show (n :: Int)
@@ -256,7 +261,7 @@ patExpansion delta p = runCase [
           let l' = l ++ [0]
           setIds (le, l')
           chain <- patExpansion (IAccess freshName) (iRecordPat ps)
-          return $ iAMatchChainList (l, Var) (toRAccess delta) (iIdPat freshName :: Fix SimplePatSig SimplePat, chain)
+          return $ iAMatchChainList l (toRAccess delta) (iIdPat freshName :: Fix SimplePatSig SimplePat, chain)
   )]
   where
     patCase :: forall f y. (f :<: ComplexPatSig) => 
