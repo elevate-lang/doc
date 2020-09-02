@@ -273,6 +273,41 @@ replaceTail a b = caseH (const b) (\case
     (MatchChainList a (p, xs) :&: ma) -> inject (MatchChainList a (p, replaceTail xs b) :&: ma)
   ) (unTerm a)
 
+matchChainTagging :: forall e. Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel -> JudgedMatchChain e
+matchChainTagging chain = runCase [
+  chainCase @(RHSExpr e :&: RHSId) chain (\case
+    _ -> (0 :: Int, [(Var, hfmap convert (unTerm chain))])
+  ),
+  chainCase @(MatchChain SimplePatSig SimplePat :&: MatchId) chain (\case
+    MatchChainList delta (p, xs) :&: l -> runCase [
+      chainCase @(RHSExpr e :&: RHSId) xs (\case
+        _ -> runCase [
+          patCase @Pat p (\case
+            -- Var v
+            IdPat v -> ((length l - 1) :: Int, [(Var, hfmap convert (unTerm chain))] ++ snd (matchChainTagging xs))
+            -- NonVar l
+            LabelPat label -> (0 ::Int, [(NonVar, hfmap convert (unTerm chain))] ++ snd (matchChainTagging xs))
+          ),
+          patCase @AppPat p (\case
+            -- NonVar (l v)
+            _ -> (0 ::Int, [(NonVar, hfmap convert (unTerm chain))] ++ snd (matchChainTagging xs))
+          )]
+      ),
+      chainCase @(MatchChain SimplePatSig SimplePat :&: MatchId) xs (\case
+        _ -> undefined
+      )]
+  )]
+  where
+    chainCase :: forall f y e. (f :<: TaggedMatchChainSig e SimplePatSig SimplePat) => 
+      Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel -> (f (Fix (TaggedMatchChainSig e SimplePatSig SimplePat)) ListModel -> y) -> Maybe y
+    chainCase = lCase
+    patCase :: forall f y. (f :<: SimplePatSig) => 
+      Fix SimplePatSig SimplePat -> (f (Fix SimplePatSig) SimplePat -> y) -> Maybe y
+    patCase = lCase
+    convert :: forall f i. Term f i -> K () i
+    convert (Term f) = K ()
+    
+
 {-
 class PatExpansion f e p m where
   patExpansionAlg :: Alg f (Compose m (K (Fix (TaggedMatchChainSig e p SimplePat) ListModel, Maybe Id)))
