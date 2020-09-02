@@ -276,25 +276,42 @@ replaceTail a b = caseH (const b) (\case
 matchChainTagging :: forall e. Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel -> JudgedMatchChain e
 matchChainTagging chain = runCase [
   chainCase @(RHSExpr e :&: RHSId) chain (\case
-    _ -> (0 :: Int, [(Var, hfmap convert (unTerm chain))])
+    _ -> (0, [(Var, hfmap convert (unTerm chain))])
   ),
   chainCase @(MatchChain SimplePatSig SimplePat :&: MatchId) chain (\case
-    MatchChainList delta (p, xs) :&: l -> runCase [
+    MatchChainList delta1 (p1, xs) :&: l1 -> runCase [
       chainCase @(RHSExpr e :&: RHSId) xs (\case
         _ -> runCase [
-          patCase @Pat p (\case
+          patCase @Pat p1 (\case
             -- Var v
-            IdPat v -> ((length l - 1) :: Int, [(Var, hfmap convert (unTerm chain))] ++ snd (matchChainTagging xs))
+            IdPat v -> ((length l1 - 1), [(Var, hfmap convert (unTerm chain))] ++ snd (matchChainTagging xs))
             -- NonVar l
-            LabelPat label -> (0 ::Int, [(NonVar, hfmap convert (unTerm chain))] ++ snd (matchChainTagging xs))
+            LabelPat label -> (0, [(NonVar, hfmap convert (unTerm chain))] ++ snd (matchChainTagging xs))
           ),
-          patCase @AppPat p (\case
+          patCase @AppPat p1 (\case
             -- NonVar (l v)
-            _ -> (0 ::Int, [(NonVar, hfmap convert (unTerm chain))] ++ snd (matchChainTagging xs))
+            _ -> (0, [(NonVar, hfmap convert (unTerm chain))] ++ snd (matchChainTagging xs))
           )]
       ),
       chainCase @(MatchChain SimplePatSig SimplePat :&: MatchId) xs (\case
-        _ -> undefined
+        MatchChainList delta2 (p2, ys) :&: l2 -> runCase [
+          patCase @Pat p2 (\case
+            -- Var
+            IdPat v -> 
+              if l2 == l1 ++ [last l2]
+                then case (matchChainTagging xs) of
+                  (0, txs) -> (0, [(NonVar, hfmap convert (unTerm chain))] ++ txs) -- the special case regardless pattern property
+                  (c, txs) -> (c - 1, [(Var, hfmap convert (unTerm chain))] ++ txs)
+                else if (length l2) == (length l1) && (take (length l2 - 1) l2) == (take (length l1 - 1) l1)
+                  then (fst (matchChainTagging xs), [(Var, hfmap convert (unTerm chain))] ++ snd (matchChainTagging xs))
+                  else (fst (matchChainTagging xs) + (length l1 - length l2), [(Var, hfmap convert (unTerm chain))] ++ snd (matchChainTagging xs)) 
+            -- NonVar
+            LabelPat label -> (0, [(NonVar, hfmap convert (unTerm chain))] ++ snd (matchChainTagging xs))
+          ),
+          patCase @AppPat p2 (\case
+            -- NonVar
+            _ -> (0, [(NonVar, hfmap convert (unTerm chain))] ++ snd (matchChainTagging xs))
+          )]
       )]
   )]
   where
