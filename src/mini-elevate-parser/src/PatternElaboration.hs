@@ -61,7 +61,8 @@ type MatchId = [Natural]
 
 type RHSId = MatchId
 
-type ComplexPatSig = Pat :+: AppPat :+: RecordPat :+: MatchAllPat
+-- type ComplexPatSig = Pat :+: AppPat :+: RecordPat :+: MatchAllPat
+type ComplexPatSig = RecordPat :+: AppPat :+: Pat :+: MatchAllPat
 
 type ComplexMatch = Match ComplexPatSig ComplexPat
 
@@ -323,7 +324,76 @@ matchChainTagging chain = runCase [
     patCase = lCase
     convert :: forall f i. Term f i -> K () i
     convert (Term f) = K ()
-    
+
+
+{- TESTING -}
+astToAccess :: Fix ExprSig EXPR -> AccessForm
+astToAccess expr = runCase [
+  exprCase @Expr expr (\case
+    IdExpr i -> IAccess i
+    _ -> error "Unexpected expression"
+  ),
+  exprCase @RecordOps expr (\case
+    FieldAccess e l -> runCase [
+      exprCase @Expr e (\case
+        IdExpr i -> IFAccess i l
+        _ -> error "Unexpected expression"
+      )]
+    RecordMod e xs -> runCase [
+      exprCase @Expr e (\case
+        IdExpr i -> IRAccess i
+        _ -> error "Unexpected expression"
+      ),
+      exprCase @RecordOps e (\case
+        FieldAccess e1 l1 -> runCase [
+          exprCase @Expr e1 (\case
+            IdExpr i -> IFRAccess i l1
+            _ -> error "Unexpected expression"
+          )]
+        _ -> error "Unexpected expression"
+      )]
+  )]
+  where
+    exprCase :: forall f y. (f :<: ExprSig) => 
+      Fix ExprSig EXPR -> (f (Fix ExprSig) EXPR -> y) -> Maybe y
+    exprCase = lCase
+
+executePatternExpansion :: Fix ExprSig EXPR -> Natural -> [Fix (TaggedMatchChainSig ExprSig SimplePatSig SimplePat) ListModel]
+executePatternExpansion expr n = runCase [
+  exprCase @(Match PatSig ComplexPat) expr (\case
+    Match exp list -> case list of
+      [] -> []
+      ((p, l) : xs) -> (flip evalState (Set.empty, ([n], [n]), 0) . flip runReaderT ("", l) $ patExpansion (astToAccess exp) p) : (executePatternExpansion (iMatch exp xs) (n + 1))
+  )]
+  where
+    exprCase :: forall f y. (f :<: ExprSig) => 
+      Fix ExprSig EXPR -> (f (Fix ExprSig) EXPR -> y) -> Maybe y
+    exprCase = lCase
+
+patternElaboration :: Fix ExprSig EXPR -> Fix ExprSig EXPR
+patternElaboration m = undefined
+
+matchString1 :: String
+matchString1 = [r|match exp with <
+  {Snd: F | Trd: T} => 1 |
+  {Fst: F | Snd: T} => 2 |
+  {Trd: F} => 3 |
+  {Trd: T} => 4
+>|]
+
+matchString2 :: String
+matchString2 = [r|match x with <
+  App {Fun: App {Fun: Primitive Map | Arg: f} | Arg: App {Fun: App {Fun: Primitive Map | Arg: g} | Arg: x}} => 
+  Success (App {Fun: App {Fun: Primitive Map | Arg: Lam {Param: 0 | Body: App {Fun: f | Arg: App {Fun: g | Arg: Id {Name: 0}}}}} | Arg: x})
+  | _ => Failure 1
+>|]
+
+matchExample1 :: Fix ExprSig EXPR
+matchExample1 = head (rights [testRun match matchString1])
+
+-- TODO: this example is not able to run
+matchExample2 :: Fix ExprSig EXPR
+matchExample2 = head (rights [testRun match matchString2])
 
 {-
 class PatExpansion f e p m where
