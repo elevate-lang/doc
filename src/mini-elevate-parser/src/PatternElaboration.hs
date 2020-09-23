@@ -186,34 +186,64 @@ patExpansion delta p = runCase [
   ),
   patCase @AppPat p (\case
     AppPat label p -> 
-      runCase [patCase @Pat p (\case
-        -- l v
-        IdPat v -> do
-          (le, l) <- getIds
-          (_, rhs) <- ask
-          return $ iAMatchChainList l delta (iAppIdPat label v :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
+      runCase [
+        patCase @Pat p (\case
+          -- l v
+          IdPat v -> do
+            (le, l) <- getIds
+            (_, rhs) <- ask
+            return $ iAMatchChainList l delta (iAppIdPat label v :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
+          {- the case shouldn't be here, given @Pat is not matching any complex patterns
+          -- l pi
+          _ -> do
+            n <- getFreshNameId
+            let freshName = "#a" ++ show (n :: Int)
+            -- update fresh name counter
+            setFreshNameId (n + 1)
+            (le, l) <- getIds
+            let l' = l ++ [0]
+            setIds (le, l')
+            chain <- patExpansion (IAccess freshName) p
+            return $ iAMatchChainList l delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, chain)
+          -}
+        ), 
         -- l pi
-        _ -> do
-          n <- getFreshNameId
-          let freshName = "#a" ++ show (n :: Int)
-          -- update fresh name counter
-          setFreshNameId (n + 1)
-          (le, l) <- getIds
-          let l' = l ++ [0]
-          setIds (le, l')
-          chain <- patExpansion (IAccess freshName) p
-          return $ iAMatchChainList l delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, chain)
-      ), patCase @MatchAllPat p (\case
-        -- l MatchAllPat
-        _ -> do
-          n <- getFreshNameId
-          let freshName = "#a" ++ show (n :: Int)
-          -- update fresh name counter
-          setFreshNameId (n + 1)
-          (le, l) <- getIds
-          (_, rhs) <- ask
-          return $ iAMatchChainList l delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
-      )]
+        patCase @AppPat p (\case
+          _ -> do
+            n <- getFreshNameId
+            let freshName = "#a" ++ show (n :: Int)
+            -- update fresh name counter
+            setFreshNameId (n + 1)
+            (le, l) <- getIds
+            let l' = l ++ [0]
+            setIds (le, l')
+            chain <- patExpansion (IAccess freshName) p
+            return $ iAMatchChainList l delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, chain)
+        ),
+        -- l pi
+        patCase @RecordPat p (\case
+          _ -> do
+            n <- getFreshNameId
+            let freshName = "#a" ++ show (n :: Int)
+            -- update fresh name counter
+            setFreshNameId (n + 1)
+            (le, l) <- getIds
+            let l' = l ++ [0]
+            setIds (le, l')
+            chain <- patExpansion (IAccess freshName) p
+            return $ iAMatchChainList l delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, chain)
+        ),
+        patCase @MatchAllPat p (\case
+          -- l MatchAllPat
+          _ -> do
+            n <- getFreshNameId
+            let freshName = "#a" ++ show (n :: Int)
+            -- update fresh name counter
+            setFreshNameId (n + 1)
+            (le, l) <- getIds
+            (_, rhs) <- ask
+            return $ iAMatchChainList l delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
+        )]
   ),
   patCase @RecordPat p (\case
     RecordPat ps -> case ps of
@@ -232,7 +262,7 @@ patExpansion delta p = runCase [
             labelSet <- getLabels
             -- check if label is in label set
             if Set.member label labelSet
-              then fail "Error: label duplication"
+              then fail ("Error: label duplication: " ++ (show label))
               else do
                 let newlabelSet = Set.insert label labelSet
                 setLabels newlabelSet
@@ -243,7 +273,7 @@ patExpansion delta p = runCase [
             labelSet <- getLabels
             -- check if label is in label set
             if Set.member label labelSet
-              then fail "Error: label duplication"
+              then fail ("Error: label duplication: " ++ (show label))
               else do
                 let newlabelSet = Set.insert label labelSet
                 setLabels newlabelSet
@@ -364,6 +394,9 @@ executePatternExpansion expr n = runCase [
     Match exp list -> case list of
       [] -> []
       ((p, l) : xs) -> (flip evalState (Set.empty, ([n], [n]), 0) . flip runReaderT ("", l) $ patExpansion (astToAccess exp) p) : (executePatternExpansion (iMatch exp xs) (n + 1))
+  ),
+  exprCase @Expr expr (\case
+    _ -> error "Not a match expression"
   )]
   where
     exprCase :: forall f y. (f :<: ExprSig) => 
