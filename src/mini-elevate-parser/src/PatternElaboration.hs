@@ -36,8 +36,6 @@ import Data.Functor.Compose
 import Data.Comp.Multi.Projection
 import Parser
 
-import Parser
-
 data AccessForm = IAccess Id | IFAccess Id Label | IFRAccess Id Label | IRAccess Id deriving (Eq, Ord, Show)
 
 toRAccess :: AccessForm -> AccessForm
@@ -64,7 +62,8 @@ type MatchId = [Natural]
 
 type RHSId = MatchId
 
-type ComplexPatSig = Pat :+: AppPat :+: RecordPat :+: MatchAllPat
+-- type ComplexPatSig = Pat :+: AppPat :+: RecordPat :+: MatchAllPat
+type ComplexPatSig = RecordPat :+: AppPat :+: Pat :+: MatchAllPat
 
 type ComplexMatch = Match ComplexPatSig ComplexPat
 
@@ -89,8 +88,9 @@ type MatchChainSig e p l = RHSExpr e :+: MatchChain p l
 
 data PatProp = NonVar | Var
 
--- used form (RHSExpr e :&: (RHSId, PatProp))) instead of RHSExpr e :&: RHSId :&: PatProp) to prevent confusing the smart constructor
-type TaggedMatchChainSig e p l = (RHSExpr e :&: (RHSId, PatProp)) :+: (MatchChain p l :&: (MatchId, PatProp))
+type TaggedMatchChainSig e p l = (RHSExpr e :&: RHSId) :+: (MatchChain p l :&: MatchId)
+
+type JudgedMatchChain e = (Int, [(PatProp, TaggedMatchChainSig e SimplePatSig SimplePat (K ()) ListModel)])
 
 $(derive [makeHFunctor, makeHFoldable, makeHTraversable][''MatchChain, ''RHSExpr])
 
@@ -178,48 +178,78 @@ patExpansion delta p = runCase [
       setFreshNameId (n + 1)
       (le, l) <- getIds
       (_, e) <- ask
-      return $ iAMatchChainList (l, Var) delta (iIdPat freshName :: Fix SimplePatSig SimplePat, iARHSExpr (le, Var) e)
+      return $ iAMatchChainList l delta (iIdPat freshName :: Fix SimplePatSig SimplePat, iARHSExpr le e)
   ),
   patCase @Pat p (\case
     IdPat v -> do
       (le, l) <- getIds
       (_, rhs) <- ask
-      return $ iAMatchChainList (l, Var) delta (iIdPat v :: Fix SimplePatSig SimplePat, iARHSExpr (le, Var) rhs)
+      return $ iAMatchChainList l delta (iIdPat v :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
     LabelPat label -> do
       (le, l) <- getIds
       (_, rhs) <- ask
-      return $ iAMatchChainList (l, NonVar) delta (iLabelPat label :: Fix SimplePatSig SimplePat, iARHSExpr (le, Var) rhs)
+      return $ iAMatchChainList l delta (iLabelPat label :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
   ),
   patCase @AppPat p (\case
     AppPat label p -> 
-      runCase [patCase @Pat p (\case
-        -- l v
-        IdPat v -> do
-          (le, l) <- getIds
-          (_, rhs) <- ask
-          return $ iAMatchChainList (l, NonVar) delta (iAppIdPat label v :: Fix SimplePatSig SimplePat, iARHSExpr (le, Var) rhs)
+      runCase [
+        patCase @Pat p (\case
+          -- l v
+          IdPat v -> do
+            (le, l) <- getIds
+            (_, rhs) <- ask
+            return $ iAMatchChainList l delta (iAppIdPat label v :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
+          {- the case shouldn't be here, given @Pat is not matching any complex patterns
+          -- l pi
+          _ -> do
+            n <- getFreshNameId
+            let freshName = "#a" ++ show (n :: Int)
+            -- update fresh name counter
+            setFreshNameId (n + 1)
+            (le, l) <- getIds
+            let l' = l ++ [0]
+            setIds (le, l')
+            chain <- patExpansion (IAccess freshName) p
+            return $ iAMatchChainList l delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, chain)
+          -}
+        ), 
         -- l pi
-        _ -> do
-          n <- getFreshNameId
-          let freshName = "#a" ++ show (n :: Int)
-          -- update fresh name counter
-          setFreshNameId (n + 1)
-          (le, l) <- getIds
-          let l' = l ++ [0]
-          setIds (le, l')
-          chain <- patExpansion (IAccess freshName) p
-          return $ iAMatchChainList (l, NonVar) delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, chain)
-      ), patCase @MatchAllPat p (\case
-        -- l MatchAllPat
-        _ -> do
-          n <- getFreshNameId
-          let freshName = "#a" ++ show (n :: Int)
-          -- update fresh name counter
-          setFreshNameId (n + 1)
-          (le, l) <- getIds
-          (_, rhs) <- ask
-          return $ iAMatchChainList (l, NonVar) delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, iARHSExpr (le, Var) rhs)
-      )]
+        patCase @AppPat p (\case
+          _ -> do
+            n <- getFreshNameId
+            let freshName = "#a" ++ show (n :: Int)
+            -- update fresh name counter
+            setFreshNameId (n + 1)
+            (le, l) <- getIds
+            let l' = l ++ [0]
+            setIds (le, l')
+            chain <- patExpansion (IAccess freshName) p
+            return $ iAMatchChainList l delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, chain)
+        ),
+        -- l pi
+        patCase @RecordPat p (\case
+          _ -> do
+            n <- getFreshNameId
+            let freshName = "#a" ++ show (n :: Int)
+            -- update fresh name counter
+            setFreshNameId (n + 1)
+            (le, l) <- getIds
+            let l' = l ++ [0]
+            setIds (le, l')
+            chain <- patExpansion (IAccess freshName) p
+            return $ iAMatchChainList l delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, chain)
+        ),
+        patCase @MatchAllPat p (\case
+          -- l MatchAllPat
+          _ -> do
+            n <- getFreshNameId
+            let freshName = "#a" ++ show (n :: Int)
+            -- update fresh name counter
+            setFreshNameId (n + 1)
+            (le, l) <- getIds
+            (_, rhs) <- ask
+            return $ iAMatchChainList l delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
+        )]
   ),
   patCase @RecordPat p (\case
     RecordPat ps -> case ps of
@@ -231,28 +261,34 @@ patExpansion delta p = runCase [
         setFreshNameId (n + 1)
         (le, l) <- getIds
         (_, rhs) <- ask
-        return $ iAMatchChainList (l, Var) (toRAccess delta) (iIdPat freshName :: Fix SimplePatSig SimplePat, iARHSExpr (le, Var) rhs)
+        return $ iAMatchChainList l (toRAccess delta) (iIdPat freshName :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
       ((label, pattern) : xs) -> case delta of 
         (IAccess v) -> case xs of
           [] -> do
             labelSet <- getLabels
-            -- TODO check if label is in label set
-            let newlabelSet = Set.insert label labelSet
-            setLabels newlabelSet
-            (_, rhs) <- ask
-            chain <- patExpansion (IFAccess v label) pattern
-            return chain
+            -- check if label is in label set
+            if Set.member label labelSet
+              then fail ("Error: label duplication: " ++ (show label))
+              else do
+                let newlabelSet = Set.insert label labelSet
+                setLabels newlabelSet
+                (_, rhs) <- ask
+                chain <- patExpansion (IFAccess v label) pattern
+                return chain
           _ -> do
             labelSet <- getLabels
-            -- TODO check if label is in label set
-            let newlabelSet = Set.insert label labelSet
-            setLabels newlabelSet
-            chain2 <- patExpansion (IFRAccess v label) pattern
-            (le, l) <- getIds
-            let l' = (Prelude.take (length l - 1) l) ++ [(last l + 1)]
-            setIds (le, l')
-            chain1 <- patExpansion (IAccess v) (iRecordPat xs)
-            return (replaceTail chain2 chain1)
+            -- check if label is in label set
+            if Set.member label labelSet
+              then fail ("Error: label duplication: " ++ (show label))
+              else do
+                let newlabelSet = Set.insert label labelSet
+                setLabels newlabelSet
+                chain2 <- patExpansion (IFRAccess v label) pattern
+                (le, l) <- getIds
+                let l' = (Prelude.take (length l - 1) l) ++ [(last l + 1)]
+                setIds (le, l')
+                chain1 <- patExpansion (IAccess v) (iRecordPat xs)
+                return (replaceTail chain2 chain1)
         _ -> do
           n <- getFreshNameId
           let freshName = "#a" ++ show (n :: Int)
@@ -262,7 +298,7 @@ patExpansion delta p = runCase [
           let l' = l ++ [0]
           setIds (le, l')
           chain <- patExpansion (IAccess freshName) (iRecordPat ps)
-          return $ iAMatchChainList (l, Var) (toRAccess delta) (iIdPat freshName :: Fix SimplePatSig SimplePat, chain)
+          return $ iAMatchChainList l (toRAccess delta) (iIdPat freshName :: Fix SimplePatSig SimplePat, chain)
   )]
   where
     patCase :: forall f y. (f :<: ComplexPatSig) => 
@@ -273,6 +309,130 @@ replaceTail :: (t ~ Fix ((RHSExpr e :&: ra) :+: (MatchChain p l :&: ma)) ListMod
 replaceTail a b = caseH (const b) (\case
     (MatchChainList a (p, xs) :&: ma) -> inject (MatchChainList a (p, replaceTail xs b) :&: ma)
   ) (unTerm a)
+
+matchChainTagging :: forall e. Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel -> JudgedMatchChain e
+matchChainTagging chain = runCase [
+  chainCase @(RHSExpr e :&: RHSId) chain (\case
+    _ -> (0, [(Var, hfmap convert (unTerm chain))])
+  ),
+  chainCase @(MatchChain SimplePatSig SimplePat :&: MatchId) chain (\case
+    MatchChainList delta1 (p1, xs) :&: l1 -> runCase [
+      chainCase @(RHSExpr e :&: RHSId) xs (\case
+        _ -> runCase [
+          patCase @Pat p1 (\case
+            -- Var v
+            IdPat v -> ((length l1 - 1), [(Var, hfmap convert (unTerm chain))] ++ snd (matchChainTagging xs))
+            -- NonVar l
+            LabelPat label -> (0, [(NonVar, hfmap convert (unTerm chain))] ++ snd (matchChainTagging xs))
+          ),
+          patCase @AppPat p1 (\case
+            -- NonVar (l v)
+            _ -> (0, [(NonVar, hfmap convert (unTerm chain))] ++ snd (matchChainTagging xs))
+          )]
+      ),
+      chainCase @(MatchChain SimplePatSig SimplePat :&: MatchId) xs (\case
+        MatchChainList delta2 (p2, ys) :&: l2 -> runCase [
+          patCase @Pat p2 (\case
+            -- Var
+            IdPat v -> 
+              if l2 == l1 ++ [last l2]
+                then case (matchChainTagging xs) of
+                  (0, txs) -> (0, [(NonVar, hfmap convert (unTerm chain))] ++ txs) -- the special case regardless pattern property
+                  (c, txs) -> (c - 1, [(Var, hfmap convert (unTerm chain))] ++ txs)
+                else if (length l2) == (length l1) && (take (length l2 - 1) l2) == (take (length l1 - 1) l1)
+                  then (fst (matchChainTagging xs), [(Var, hfmap convert (unTerm chain))] ++ snd (matchChainTagging xs))
+                  else (fst (matchChainTagging xs) + (length l1 - length l2), [(Var, hfmap convert (unTerm chain))] ++ snd (matchChainTagging xs)) 
+            -- NonVar
+            LabelPat label -> (0, [(NonVar, hfmap convert (unTerm chain))] ++ snd (matchChainTagging xs))
+          ),
+          patCase @AppPat p2 (\case
+            -- NonVar
+            _ -> (0, [(NonVar, hfmap convert (unTerm chain))] ++ snd (matchChainTagging xs))
+          )]
+      )]
+  )]
+  where
+    chainCase :: forall f y e. (f :<: TaggedMatchChainSig e SimplePatSig SimplePat) => 
+      Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel -> (f (Fix (TaggedMatchChainSig e SimplePatSig SimplePat)) ListModel -> y) -> Maybe y
+    chainCase = lCase
+    patCase :: forall f y. (f :<: SimplePatSig) => 
+      Fix SimplePatSig SimplePat -> (f (Fix SimplePatSig) SimplePat -> y) -> Maybe y
+    patCase = lCase
+    convert :: forall f i. Term f i -> K () i
+    convert (Term f) = K ()
+
+
+{- TESTING -}
+astToAccess :: Fix ExprSig EXPR -> AccessForm
+astToAccess expr = runCase [
+  exprCase @Expr expr (\case
+    IdExpr i -> IAccess i
+    _ -> error "Unexpected expression"
+  ),
+  exprCase @RecordOps expr (\case
+    FieldAccess e l -> runCase [
+      exprCase @Expr e (\case
+        IdExpr i -> IFAccess i l
+        _ -> error "Unexpected expression"
+      )]
+    RecordMod e xs -> runCase [
+      exprCase @Expr e (\case
+        IdExpr i -> IRAccess i
+        _ -> error "Unexpected expression"
+      ),
+      exprCase @RecordOps e (\case
+        FieldAccess e1 l1 -> runCase [
+          exprCase @Expr e1 (\case
+            IdExpr i -> IFRAccess i l1
+            _ -> error "Unexpected expression"
+          )]
+        _ -> error "Unexpected expression"
+      )]
+  )]
+  where
+    exprCase :: forall f y. (f :<: ExprSig) => 
+      Fix ExprSig EXPR -> (f (Fix ExprSig) EXPR -> y) -> Maybe y
+    exprCase = lCase
+
+executePatternExpansion :: Fix ExprSig EXPR -> Natural -> [Fix (TaggedMatchChainSig ExprSig SimplePatSig SimplePat) ListModel]
+executePatternExpansion expr n = runCase [
+  exprCase @(Match PatSig ComplexPat) expr (\case
+    Match exp list -> case list of
+      [] -> []
+      ((p, l) : xs) -> (flip evalState (Set.empty, ([n], [n]), 0) . flip runReaderT ("", l) $ patExpansion (astToAccess exp) p) : (executePatternExpansion (iMatch exp xs) (n + 1))
+  ),
+  exprCase @Expr expr (\case
+    _ -> error "Not a match expression"
+  )]
+  where
+    exprCase :: forall f y. (f :<: ExprSig) => 
+      Fix ExprSig EXPR -> (f (Fix ExprSig) EXPR -> y) -> Maybe y
+    exprCase = lCase
+
+patternElaboration :: Fix ExprSig EXPR -> Fix ExprSig EXPR
+patternElaboration m = undefined
+
+matchString1 :: String
+matchString1 = [r|match exp with <
+  {Snd: F | Trd: T} => 1 |
+  {Fst: F | Snd: T} => 2 |
+  {Trd: F} => 3 |
+  {Trd: T} => 4
+>|]
+
+matchString2 :: String
+matchString2 = [r|match x with <
+  App {Fun: App {Fun: Primitive Map | Arg: f} | Arg: App {Fun: App {Fun: Primitive Map | Arg: g} | Arg: x}} => 
+  Success (App {Fun: App {Fun: Primitive Map | Arg: Lam {Param: 0 | Body: App {Fun: f | Arg: App {Fun: g | Arg: Id {Name: 0}}}}} | Arg: x})
+  | _ => Failure 1
+>|]
+
+matchExample1 :: Fix ExprSig EXPR
+matchExample1 = head (rights [testRun match matchString1])
+
+-- TODO: this example is not able to run
+matchExample2 :: Fix ExprSig EXPR
+matchExample2 = head (rights [testRun match matchString2])
 
 {-
 class PatExpansion f e p m where
