@@ -42,7 +42,7 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
-    - -ddump-splices
+#    - -ddump-splices
     dependencies:
     - mini-elevate-parser
 

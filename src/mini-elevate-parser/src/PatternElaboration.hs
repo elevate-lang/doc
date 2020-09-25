@@ -1,10 +1,11 @@
 {-# LANGUAGE TupleSections, QuasiQuotes, TemplateHaskell, StandaloneDeriving #-}
-{-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable, FlexibleContexts, FlexibleInstances, UndecidableInstances #-}
+{-# LANGUAGE DeriveFunctor, DeriveFoldable, DeriveTraversable, 
+             FlexibleContexts, FlexibleInstances, UndecidableInstances #-}
 {-# LANGUAGE DataKinds, GADTs, KindSignatures, PolyKinds, LiberalTypeSynonyms #-}
 {-# LANGUAGE TypeFamilies, TypeOperators #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE ScopedTypeVariables, InstanceSigs, TypeApplications #-}
+{-# LANGUAGE ScopedTypeVariables, InstanceSigs, TypeApplications, RankNTypes #-}
 
 -- variable | label [variable]
 module PatternElaboration where
@@ -14,7 +15,7 @@ import Data.Either
 import Numeric.Natural
 import Text.RawString.QQ
 import qualified Data.Vec.Lazy as VL
-import Data.Type.Nat hiding (toNatural)
+import Data.Type.Nat hiding (toNatural, cata)
 import qualified Data.Set as Set
 import Control.Monad
 import Control.Monad.Reader
@@ -159,7 +160,12 @@ runCase ls = case [x | Just x <- ls] of
 runCaseOn :: a -> [a -> Maybe b] -> b
 runCaseOn a = runCase . map ($ a)
 
--- (Int, [(PatProp, TaggedMatchChainSig e SimplePatSig SimplePat (K ()) ListModel)])
+matchChainToList :: 
+  Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel ->
+  [TaggedMatchChainSig e SimplePatSig SimplePat (K ()) ListModel]
+matchChainToList mc = caseH (return . inj . hfmap (const (K ()))) (\case
+    (MatchChainList a (p, xs) :&: ma) -> inj (MatchChainList a (p, K ()) :&: ma) : matchChainToList xs
+  ) (unTerm mc)
 
 patExpansion :: (MonadState PEState m, MonadReader (PERead e) m) =>
   AccessForm -> Fix ComplexPatSig ComplexPat -> m (Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel)

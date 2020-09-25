@@ -83,5 +83,3 @@ redundant point = do
   case p of
     Link {} -> return True
     Info {} -> return False
-
--- test union-find by detecting cycles in an undirected graph
