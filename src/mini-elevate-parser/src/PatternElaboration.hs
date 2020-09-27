@@ -199,19 +199,6 @@ patExpansion delta p = runCase [
             (le, l) <- getIds
             (_, rhs) <- ask
             return $ iAMatchChainList l delta (iAppIdPat label v :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
-          {- the case shouldn't be here, given @Pat is not matching any complex patterns
-          -- l pi
-          _ -> do
-            n <- getFreshNameId
-            let freshName = "#a" ++ show (n :: Int)
-            -- update fresh name counter
-            setFreshNameId (n + 1)
-            (le, l) <- getIds
-            let l' = l ++ [0]
-            setIds (le, l')
-            chain <- patExpansion (IAccess freshName) p
-            return $ iAMatchChainList l delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, chain)
-          -}
         ), 
         -- l pi
         patCase @AppPat p (\case
@@ -283,11 +270,11 @@ patExpansion delta p = runCase [
               else do
                 let newlabelSet = Set.insert label labelSet
                 setLabels newlabelSet
+                chain1 <- patExpansion (IAccess v) (iRecordPat xs)
                 chain2 <- patExpansion (IFRAccess v label) pattern
                 (le, l) <- getIds
                 let l' = (Prelude.take (length l - 1) l) ++ [(last l + 1)]
                 setIds (le, l')
-                chain1 <- patExpansion (IAccess v) (iRecordPat xs)
                 return (replaceTail chain2 chain1)
         _ -> do
           n <- getFreshNameId
