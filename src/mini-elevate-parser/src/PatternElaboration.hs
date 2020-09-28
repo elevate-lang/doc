@@ -158,6 +158,7 @@ matchChainToList mc = caseH (return . inj . hfmap (const (K ()))) (\case
     (MatchChainList a (p, xs) :&: ma) -> inj (MatchChainList a (p, K ()) :&: ma) : matchChainToList xs
   ) (unTerm mc)
 
+{- PATTERN EXPANSION -}
 patExpansion :: (MonadState PEState m, MonadReader (PERead e) m) =>
   AccessForm -> Fix ComplexPatSig ComplexPat -> m (Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel)
 patExpansion delta p = runCase [
@@ -312,6 +313,7 @@ replaceTail a b = caseH (const b) (\case
     (MatchChainList a (p, xs) :&: ma) -> inject (MatchChainList a (p, replaceTail xs b) :&: ma)
   ) (unTerm a)
 
+{- MATCH CHAIN SORTING-}
 matchChainTagging :: forall e. Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel -> JudgedMatchChain e
 matchChainTagging chain = runCase [
   chainCase @(RHSExpr e :&: RHSId) chain (\case
@@ -362,6 +364,28 @@ matchChainTagging chain = runCase [
     patCase = lCase
     convert :: forall f i. Term f i -> K () i
     convert (Term f) = K ()
+
+-- WIP
+matchChainReversing :: forall e. (Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel, Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel) -> Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel
+matchChainReversing (chain, chainAccum) = runCase [
+  chainCase @(RHSExpr e :&: RHSId) chain (\case
+    _ -> chainAccum
+  ),
+  -- (Match delta with <pi => chain>, chainAccum)
+  chainCase @(MatchChain SimplePatSig SimplePat :&: MatchId) chain (\case
+    -- (chain, Match delta with <pi => chainAccum>)
+    MatchChainList delta (p, xs) :&: l -> matchChainReversing (xs, (exchange chain chainAccum))
+  )]
+  where
+    chainCase :: forall f y e. (f :<: TaggedMatchChainSig e SimplePatSig SimplePat) => 
+      Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel -> (f (Fix (TaggedMatchChainSig e SimplePatSig SimplePat)) ListModel -> y) -> Maybe y
+    chainCase = lCase
+    exchange :: (t ~ Fix ((RHSExpr e :&: ra) :+: (MatchChain p l :&: ma)) ListModel) => t -> t -> t
+    exchange a b = caseH (const b) (\case
+      (MatchChainList a (p, xs) :&: ma) -> inject (MatchChainList a (p, b) :&: ma)
+    ) (unTerm a)
+
+-- TODO match chain grouping
 
 
 {- TESTING -}
@@ -436,7 +460,6 @@ matchString2 = [r|match x with <
 matchExample1 :: Fix ExprSig EXPR
 matchExample1 = head (rights [testRun match matchString1])
 
--- TODO: this example is not able to run
 matchExample2 :: Fix ExprSig EXPR
 matchExample2 = head (rights [testRun match matchString2])
 
