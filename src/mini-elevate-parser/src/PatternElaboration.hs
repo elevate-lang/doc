@@ -261,8 +261,7 @@ patExpansion delta p = runCase [
                   if Set.member label labelSet
                     then fail ("Error: label duplication: " ++ (show label))
                     else do
-                      let newlabelSet = Set.insert label labelSet
-                      chain <- local (\r -> updateLabelSet r newlabelSet) (patExpansion (IFAccess v label) pattern)
+                      chain <- (patExpansion (IFAccess v label) pattern)
                       return chain
                 _ -> do
                   (labelSet, _, _) <- ask
@@ -412,6 +411,9 @@ executePatternExpansion expr n = runCase [
     exprCase :: forall f y. (f :<: ExprSig) => 
       Fix ExprSig EXPR -> (f (Fix ExprSig) EXPR -> y) -> Maybe y
     exprCase = lCase
+
+-- TODO : No show defined for the type (Int, [(PatProp, TaggedMatchChainSig e SimplePatSig SimplePat (K ()) ListModel)])
+executePatExpAndTag match = map matchChainTagging (executePatternExpansion match 0)
 
 patternElaboration :: Fix ExprSig EXPR -> Fix ExprSig EXPR
 patternElaboration m = undefined
