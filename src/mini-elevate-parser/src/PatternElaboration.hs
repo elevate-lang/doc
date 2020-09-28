@@ -36,6 +36,8 @@ import Data.Functor.Compose
 import Data.Comp.Multi.Projection
 import Parser
 
+import HList as HL
+
 data AccessForm = IAccess Id | IFAccess Id Label | IFRAccess Id Label | IRAccess Id deriving (Eq, Ord, Show)
 
 toRAccess :: AccessForm -> AccessForm
@@ -110,42 +112,31 @@ instance (ShowHF a_anSL, HFunctor a_anSL) => ShowHF (RHSExpr a_anSL) where
   showHF (RHSExpr x_aogU)
     = (K $ (showConstr "RHSExpr") [show x_aogU])
 
-type PEState = (Set.Set Label, (RHSId, MatchId), Int)
+type PEState = ((RHSId, MatchId), Int)
 
 getFreshNameId :: (MonadState PEState m) => m Int
 getFreshNameId = do
-  (_, _, n) <- get
+  (_, n) <- get
   return n
 
 setFreshNameId :: (MonadState PEState m) => Int -> m Int
 setFreshNameId n = do
-  (labels, ids, _) <- get
-  put (labels, ids, n)
+  (ids, _) <- get
+  put (ids, n)
   return n
 
 getIds :: (MonadState PEState m) => m (MatchId, MatchId)
 getIds = do
-  (_, ids, _) <- get
+  (ids, _) <- get
   return ids
 
 setIds :: (MonadState PEState m) => (MatchId, MatchId) -> m (MatchId, MatchId)
 setIds newids = do
-  (labels, _, n) <- get
-  put (labels, newids, n)
+  ( _, n) <- get
+  put (newids, n)
   return newids
 
-getLabels :: (MonadState PEState m) => m (Set.Set Label)
-getLabels = do 
-  (labels, _, _) <- get
-  return labels
-
-setLabels :: (MonadState PEState m) => (Set.Set Label)-> m (Set.Set Label)
-setLabels newlabels = do
-  (_, ids, n) <- get
-  put (newlabels, ids, n)
-  return newlabels
-
-type PERead e = (Id , Fix e EXPR)
+type PERead e = (Set.Set Label, Id, Fix e EXPR)
 
 lCase :: forall g i f y. (f :<: g) => Fix g i -> (f (Fix g) i -> y) -> Maybe y
 lCase x f = case project x :: Maybe (f (Fix g) i) of
@@ -177,30 +168,40 @@ patExpansion delta p = runCase [
       -- update fresh name counter
       setFreshNameId (n + 1)
       (le, l) <- getIds
-      (_, e) <- ask
-      return $ iAMatchChainList l delta (iIdPat freshName :: Fix SimplePatSig SimplePat, iARHSExpr le e)
+      (_, _, rhs) <- ask
+      return $ iAMatchChainList l delta (iIdPat freshName :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
   ),
   patCase @Pat p (\case
     IdPat v -> do
       (le, l) <- getIds
-      (_, rhs) <- ask
+      (_, _, rhs) <- ask
       return $ iAMatchChainList l delta (iIdPat v :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
     LabelPat label -> do
       (le, l) <- getIds
-      (_, rhs) <- ask
+      (_, _, rhs) <- ask
       return $ iAMatchChainList l delta (iLabelPat label :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
   ),
   patCase @AppPat p (\case
+    -- l v
+    AppIdPat label v -> do
+      (le, l) <- getIds
+      (_, _, rhs) <- ask
+      return $ iAMatchChainList l delta (iAppIdPat label v :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
+    -- l pi
     AppPat label p -> 
       runCase [
         patCase @Pat p (\case
-          -- l v
-          IdPat v -> do
+          _ -> do
+            n <- getFreshNameId
+            let freshName = "#a" ++ show (n :: Int)
+            -- update fresh name counter
+            setFreshNameId (n + 1)
             (le, l) <- getIds
-            (_, rhs) <- ask
-            return $ iAMatchChainList l delta (iAppIdPat label v :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
+            let l' = l ++ [0]
+            setIds (le, l')
+            chain <- local (\r -> updateVariable (updateLabelSet r Set.empty) freshName) (patExpansion (IAccess freshName) p)
+            return $ iAMatchChainList l delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, chain)
         ), 
-        -- l pi
         patCase @AppPat p (\case
           _ -> do
             n <- getFreshNameId
@@ -210,10 +211,9 @@ patExpansion delta p = runCase [
             (le, l) <- getIds
             let l' = l ++ [0]
             setIds (le, l')
-            chain <- patExpansion (IAccess freshName) p
+            chain <- local (\r -> updateVariable (updateLabelSet r Set.empty) freshName) (patExpansion (IAccess freshName) p)
             return $ iAMatchChainList l delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, chain)
         ),
-        -- l pi
         patCase @RecordPat p (\case
           _ -> do
             n <- getFreshNameId
@@ -223,18 +223,18 @@ patExpansion delta p = runCase [
             (le, l) <- getIds
             let l' = l ++ [0]
             setIds (le, l')
-            chain <- patExpansion (IAccess freshName) p
+            chain <- local (\r -> updateVariable (updateLabelSet r Set.empty) freshName) (patExpansion (IAccess freshName) p)
             return $ iAMatchChainList l delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, chain)
         ),
+        -- l MatchAllPat
         patCase @MatchAllPat p (\case
-          -- l MatchAllPat
           _ -> do
             n <- getFreshNameId
             let freshName = "#a" ++ show (n :: Int)
             -- update fresh name counter
             setFreshNameId (n + 1)
             (le, l) <- getIds
-            (_, rhs) <- ask
+            (_, _, rhs) <- ask
             return $ iAMatchChainList l delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
         )]
   ),
@@ -247,35 +247,47 @@ patExpansion delta p = runCase [
         -- update fresh name counter
         setFreshNameId (n + 1)
         (le, l) <- getIds
-        (_, rhs) <- ask
+        (_, _, rhs) <- ask
         return $ iAMatchChainList l (toRAccess delta) (iIdPat freshName :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
       ((label, pattern) : xs) -> case delta of 
-        (IAccess v) -> case xs of
-          [] -> do
-            labelSet <- getLabels
-            -- check if label is in label set
-            if Set.member label labelSet
-              then fail ("Error: label duplication: " ++ (show label))
-              else do
-                let newlabelSet = Set.insert label labelSet
-                setLabels newlabelSet
-                (_, rhs) <- ask
-                chain <- patExpansion (IFAccess v label) pattern
-                return chain
-          _ -> do
-            labelSet <- getLabels
-            -- check if label is in label set
-            if Set.member label labelSet
-              then fail ("Error: label duplication: " ++ (show label))
-              else do
-                let newlabelSet = Set.insert label labelSet
-                setLabels newlabelSet
-                chain1 <- patExpansion (IAccess v) (iRecordPat xs)
-                chain2 <- patExpansion (IFRAccess v label) pattern
-                (le, l) <- getIds
-                let l' = (Prelude.take (length l - 1) l) ++ [(last l + 1)]
-                setIds (le, l')
-                return (replaceTail chain2 chain1)
+        (IAccess v) -> do
+          (_, x, _) <- ask
+          if v == x
+            then do
+              case xs of
+                [] -> do
+                  (labelSet, _, _) <- ask
+                  -- check if label is in label set
+                  if Set.member label labelSet
+                    then fail ("Error: label duplication: " ++ (show label))
+                    else do
+                      let newlabelSet = Set.insert label labelSet
+                      chain <- local (\r -> updateLabelSet r newlabelSet) (patExpansion (IFAccess v label) pattern)
+                      return chain
+                _ -> do
+                  (labelSet, _, _) <- ask
+                  -- check if label is in label set
+                  if Set.member label labelSet
+                    then fail ("Error: label duplication: " ++ (show label))
+                    else do
+                      let newlabelSet = Set.insert label labelSet
+                      chain2 <- patExpansion (IFRAccess v label) pattern
+                      (le, l) <- getIds
+                      let l' = (Prelude.take (length l - 1) l) ++ [(last l + 1)]
+                      setIds (le, l')
+                      -- we can't change the order here cuz the match id need to be updated before generating chain1
+                      chain1 <- local (\r -> updateLabelSet r newlabelSet) (patExpansion (IAccess v) (iRecordPat xs))
+                      return (replaceTail chain2 chain1)
+            else do
+              n <- getFreshNameId
+              let freshName = "#a" ++ show (n :: Int)
+              -- update fresh name counter
+              setFreshNameId (n + 1)
+              (le, l) <- getIds
+              let l' = l ++ [0]
+              setIds (le, l')
+              chain <- local (\r -> updateVariable (updateLabelSet r Set.empty) freshName) (patExpansion (IAccess freshName) (iRecordPat ps))
+              return $ iAMatchChainList l (toRAccess delta) (iIdPat freshName :: Fix SimplePatSig SimplePat, chain)
         _ -> do
           n <- getFreshNameId
           let freshName = "#a" ++ show (n :: Int)
@@ -284,13 +296,17 @@ patExpansion delta p = runCase [
           (le, l) <- getIds
           let l' = l ++ [0]
           setIds (le, l')
-          chain <- patExpansion (IAccess freshName) (iRecordPat ps)
+          chain <- local (\r -> updateVariable (updateLabelSet r Set.empty) freshName) (patExpansion (IAccess freshName) (iRecordPat ps))
           return $ iAMatchChainList l (toRAccess delta) (iIdPat freshName :: Fix SimplePatSig SimplePat, chain)
   )]
   where
     patCase :: forall f y. (f :<: ComplexPatSig) => 
       Fix ComplexPatSig ComplexPat -> (f (Fix ComplexPatSig) ComplexPat -> y) -> Maybe y
     patCase = lCase
+    updateLabelSet :: PERead e -> Set.Set Label -> PERead e
+    updateLabelSet (s, a, rhs) ns = (ns, a, rhs)
+    updateVariable :: PERead e -> Id -> PERead e
+    updateVariable (s, a, rhs) v = (s, v, rhs)
 
 replaceTail :: (t ~ Fix ((RHSExpr e :&: ra) :+: (MatchChain p l :&: ma)) ListModel) => t -> t -> t
 replaceTail a b = caseH (const b) (\case
@@ -381,12 +397,13 @@ astToAccess expr = runCase [
       Fix ExprSig EXPR -> (f (Fix ExprSig) EXPR -> y) -> Maybe y
     exprCase = lCase
 
+
 executePatternExpansion :: Fix ExprSig EXPR -> Natural -> [Fix (TaggedMatchChainSig ExprSig SimplePatSig SimplePat) ListModel]
 executePatternExpansion expr n = runCase [
   exprCase @(Match PatSig ComplexPat) expr (\case
     Match exp list -> case list of
       [] -> []
-      ((p, l) : xs) -> (flip evalState (Set.empty, ([n], [n]), 0) . flip runReaderT ("", l) $ patExpansion (astToAccess exp) p) : (executePatternExpansion (iMatch exp xs) (n + 1))
+      ((p, l) : xs) -> (flip evalState (([n], [n]), 0) . flip runReaderT (Set.empty, "", l) $ patExpansion (astToAccess exp) p) : (executePatternExpansion (iMatch exp xs) (n + 1))
   ),
   exprCase @Expr expr (\case
     _ -> error "Not a match expression"
