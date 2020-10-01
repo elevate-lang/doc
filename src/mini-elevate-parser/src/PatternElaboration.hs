@@ -382,8 +382,8 @@ matchChainReversing (chain, chainAccum) = runCase [
     chainCase = lCase
     exchange :: (t ~ Fix ((RHSExpr e :&: ra) :+: (MatchChain p l :&: ma)) ListModel) => t -> t -> t
     exchange a b = caseH (const b) (\case
-      (MatchChainList a (p, xs) :&: ma) -> inject (MatchChainList a (p, b) :&: ma)
-    ) (unTerm a)
+        (MatchChainList a (p, xs) :&: ma) -> inject (MatchChainList a (p, b) :&: ma)
+      ) (unTerm a)
 
 -- TODO match chain grouping
 
