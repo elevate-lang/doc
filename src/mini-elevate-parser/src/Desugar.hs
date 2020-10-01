@@ -7,6 +7,7 @@ module Desugar where
 
 import Parser
 import AST
+import Id
 import Control.Monad.State
 import Data.Functor.Compose
 import Data.Set as Set
@@ -33,18 +34,18 @@ instance {-# OVERLAPPABLE #-} (MonadState (Set.Set Id) m, Expr :<: g) => GenRecD
   genRecDefAlg e = Compose $ fmap inject (hmapM getCompose e)
 
 instance {-# OVERLAPPABLE #-} (MonadState (Set.Set Id) m, FunDef p t :<: g, RecDef p t :<: g) => GenRecDef (FunDef p t) g m where
-  genRecDefAlg (FunDef i c ft fr p r body e) = Compose $ do
+  genRecDefAlg (FunDef i c t f e) = Compose $ do
     isShadowing <- gets (Set.member i)
     modify (Set.insert i)
-    body' <- getCompose body
+    f' <- getCompose f
     isUsed <- not <$> gets (Set.member i)
     e' <- getCompose e
     case isShadowing of
       True -> modify (Set.insert i)
       False -> modify (Set.delete i)
     return $ case isUsed of
-      True -> iRecDef i c ft fr p r body' e'
-      False -> iFunDef i c ft fr p r body' e'
+      True -> iRecDef i c t f' e'
+      False -> iFunDef i c t f' e'
 
 genRecDef :: Fix ExprSig EXPR -> Fix FullSig EXPR
 genRecDef = flip evalState (Set.empty) . getCompose . cata genRecDefAlg

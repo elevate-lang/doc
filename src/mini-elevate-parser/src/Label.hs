@@ -16,6 +16,9 @@ instance Show Labels where
 label :: String -> Label
 label = Label
 
+labels :: Set.Set Label -> Labels
+labels = Labels
+
 null :: Labels -> Bool
 null (Labels a) = Set.null a
 
@@ -24,6 +27,9 @@ fromList ls = Labels (Set.fromList ls)
 
 empty :: Labels
 empty = Labels (Set.empty)
+
+singleton :: Label -> Labels
+singleton l = Labels (Set.singleton l)
 
 isSubsetOf :: Labels -> Labels -> Bool
 isSubsetOf (Labels a) (Labels b) = Set.isSubsetOf a b

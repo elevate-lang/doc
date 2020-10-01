@@ -8,6 +8,7 @@ module TypeRep where
 import Id
 import qualified Label as L
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import qualified Control.Monad.Fail as Fail
 import Control.Monad
 import qualified UnionFind as UF
@@ -52,14 +53,14 @@ kindInstCond (RowPres rp) (RowLack rl) = False
 kindInstCond (RowPres rpa) (RowPres rpb) = L.isSubsetOf rpb rpa
 kindInstCond _ _ = False
 
-extendKind :: (Fail.MonadFail m) => L.Labels -> KindRep -> m KindRep
-extendKind ls (RowLack rl) = 
-  if L.isSubsetOf ls rl 
-  then return (RowLack (L.difference rl ls)) 
+extendKind :: (Fail.MonadFail m) => Set.Set L.Label -> KindRep -> m KindRep
+extendKind ls (RowLack rl) = let ls' = L.labels ls in
+  if L.isSubsetOf ls' rl 
+  then return (RowLack (L.difference rl ls')) 
   else Fail.fail "cannot extend"
-extendKind ls (RowPres rp) = 
-  if L.disjoint ls rp
-  then return (RowPres (L.union ls rp))
+extendKind ls (RowPres rp) = let ls' = L.labels ls in
+  if L.disjoint ls' rp
+  then return (RowPres (L.union ls' rp))
   else Fail.fail "cannot extend"
 extendKind _ _ = Fail.fail "cannot extend"
 
@@ -90,6 +91,16 @@ typeDesc t = TypeDesc t False 0
 
 typeRep :: (MonadIO m) => TypeRepF TypeRep -> m TypeRep
 typeRep t = liftIO $ UF.fresh (typeDesc t)
+
+typeRepFromDesc :: (MonadIO m) => TypeDesc -> m TypeRep
+typeRepFromDesc d = liftIO $ UF.fresh d
+
+genFreshIdType :: (MonadIO m, Occurs ("NameCounter" :- IORef Int) ts HList, 
+  MonadReader (HList ts) m) => KindRep -> m TypeRep
+genFreshIdType kind = do
+  let pre = case kind of {Type -> "t"; _ -> "r"}
+  freshId <- genFreshId pre
+  typeRep (IdTypeRep (tIdRep freshId kind))
 
 data VisitTypeRep a = NonRec (TypeRepF a) | RecHead Int (TypeRepF a) | RecBody Int
 

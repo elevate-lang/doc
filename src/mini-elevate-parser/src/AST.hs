@@ -21,18 +21,16 @@ import Data.Maybe
 import Data.List
 import qualified Data.Map.Strict as Map
 import Control.Arrow
+import Id
+import qualified Label as L
 
 type Fix f = Term f
-
-type Id = String
-
-type Label = String
 
 data PRES
 
 data Pres :: (* -> *) -> (* -> *) where
-  Pres :: [Label] -> Pres p PRES
-  Lack :: [Label] -> Pres p PRES
+  Pres :: [L.Label] -> Pres p PRES
+  Lack :: [L.Label] -> Pres p PRES
 
 data UnknownPres :: (* -> *) -> (* -> *) where
   UnknownPres :: UnknownPres p PRES
@@ -46,7 +44,7 @@ data SchemeKind
 data Row :: (* -> *) -> * -> * where
   IdRow :: Id -> Row t RowKind
   EmptyRow :: Row t RowKind
-  ExtendRow :: (Label, t TypeKind) -> t RowKind -> Row t RowKind
+  ExtendRow :: (L.Label, t TypeKind) -> t RowKind -> Row t RowKind
 
 data Type :: (* -> *) -> * -> * where
   IdType :: Id -> Type t TypeKind
@@ -75,14 +73,14 @@ data SimplePat
 
 data Pat :: (* -> *) -> * -> * where
   IdPat :: Id -> Pat p l
-  LabelPat :: Label -> Pat p l
+  LabelPat :: L.Label -> Pat p l
 
 data AppPat :: (* -> *) -> * -> * where
-  AppPat :: Label -> p ComplexPat -> AppPat p ComplexPat
-  AppIdPat :: Label -> Id -> AppPat p SimplePat
+  AppPat :: L.Label -> p ComplexPat -> AppPat p ComplexPat
+  AppIdPat :: L.Label -> Id -> AppPat p SimplePat
 
 data RecordPat :: (* -> *) -> * -> * where
-  RecordPat :: [(Label, p ComplexPat)] -> RecordPat p ComplexPat
+  RecordPat :: [(L.Label, p ComplexPat)] -> RecordPat p ComplexPat
 
 data MatchAllPat :: (* -> *) -> * -> * where
   MatchAllPat :: MatchAllPat p ComplexPat
@@ -92,33 +90,33 @@ data EXPR
 data Expr :: (* -> *) -> * -> * where
   IdExpr :: Id -> Expr e EXPR
   AppExpr :: e EXPR -> e EXPR -> Expr e EXPR
-  LamExpr :: [Id] -> e EXPR -> Expr e EXPR
+  LamExpr :: Id -> e EXPR -> Expr e EXPR
 
 data FunDef :: ((* -> *) -> * -> *) -> ((* -> *) -> * -> *) -> (* -> *) -> * -> * where
-  FunDef :: Id -> Bool -> [Id] -> [(Id, Fix p PRES)] -> [(Id, Fix t TypeKind)] -> Fix t TypeKind -> 
+  FunDef :: Id -> Bool -> ([Id], [(Id, Fix p PRES)], Fix t TypeKind) -> 
     e EXPR -> e EXPR -> FunDef p t e EXPR
 
 data RecDef :: ((* -> *) -> * -> *) -> ((* -> *) -> * -> *) -> (* -> *) -> * -> * where
-  RecDef :: Id -> Bool -> [Id] -> [(Id, Fix p PRES)] -> [(Id, Fix t TypeKind)] -> Fix t TypeKind -> 
+  RecDef :: Id -> Bool -> ([Id], [(Id, Fix p PRES)], Fix t TypeKind) -> 
     e EXPR -> e EXPR -> RecDef p t e EXPR
 
 data TypeDef :: ((* -> *) -> * -> *) -> (* -> *) -> * -> * where
   TypeDef :: Id -> Fix t SchemeKind -> e EXPR -> TypeDef t e EXPR
 
 data RecordOps :: (* -> *) -> * -> * where
-  RecordCons :: [(Label, e EXPR)] -> RecordOps e EXPR
-  FieldAccess :: e EXPR -> Label -> RecordOps e EXPR
-  FieldRemove :: e EXPR -> Label -> RecordOps e EXPR
-  RecordMod :: e EXPR -> [(Label, e EXPR)] -> RecordOps e EXPR
-  RecordExt :: e EXPR -> [(Label, e EXPR)] -> RecordOps e EXPR
+  RecordCons :: [(L.Label, e EXPR)] -> RecordOps e EXPR
+  FieldAccess :: e EXPR -> L.Label -> RecordOps e EXPR
+  FieldRemove :: e EXPR -> L.Label -> RecordOps e EXPR
+  RecordMod :: e EXPR -> [(L.Label, e EXPR)] -> RecordOps e EXPR
+  RecordExt :: e EXPR -> [(L.Label, e EXPR)] -> RecordOps e EXPR
 
 data LabelAsLit
 
 data LabelAsFun
 
 data LabelExpr :: * -> (* -> *) -> * -> * where
-  LabelLit :: Label -> LabelExpr LabelAsLit e EXPR
-  LabelApp :: Label -> e EXPR -> LabelExpr LabelAsFun e EXPR
+  LabelLit :: L.Label -> LabelExpr LabelAsLit e EXPR
+  LabelApp :: L.Label -> e EXPR -> LabelExpr LabelAsFun e EXPR
 
 data Match :: ((* -> *) -> * -> *) -> * -> (* -> *) -> * -> * where
   Match :: e EXPR -> [(Fix p l, e EXPR)] -> Match p l e EXPR
@@ -152,8 +150,6 @@ $(derive [makeShowHF]
           ''Expr{-, ''FunDef-}{-, ''RecDef-}{-, ''TypeDef-}{-, ''RecordOps-}{-, ''LabelExpr-}{-, ''Match-}])
 
 {- based on automatically generated code-}
-instance {-# OVERLAPPING #-} Show Id where
-  show i = i
 
 iUnknownPres :: (UnknownPres :<: f) => Cxt h f a PRES
 iUnknownPres = inject UnknownPres
@@ -289,41 +285,35 @@ instance OrdHF RecordPat where
 
 instance (EqHF a_a2vA, EqHF b_a2vB) => EqHF (FunDef a_a2vA b_a2vB) where
   eqHF
-    (FunDef x_aaks x_aakt x_aaku x_aakv x_aakw x_aakx x_aaky x_aakz)
-    (FunDef y_aakA y_aakB y_aakC y_aakD y_aakE y_aakF y_aakG y_aakH)
+    (FunDef x_aaks x_aakt x_aaku x_aaky x_aakz)
+    (FunDef y_aakA y_aakB y_aakC y_aakG y_aakH)
     = and
         [(x_aaks == y_aakA), (x_aakt == y_aakB), (x_aaku == y_aakC),
-          (x_aakv == y_aakD), (x_aakw == y_aakE), (x_aakx == y_aakF),
           (x_aaky `keq` y_aakG), (x_aakz `keq` y_aakH)]
 
 instance (HFunctor a_a2vA, HFunctor b_a2vB, OrdHF a_a2vA, OrdHF b_a2vB) => OrdHF (FunDef a_a2vA b_a2vB) where
   compareHF
-    (FunDef x_aakL x_aakM x_aakN x_aakO x_aakP x_aakQ x_aakR x_aakS)
-    (FunDef y_aakT y_aakU y_aakV y_aakW y_aakX y_aakY y_aakZ y_aal0)
+    (FunDef x_aakL x_aakM x_aakN x_aakR x_aakS)
+    (FunDef y_aakT y_aakU y_aakV y_aakZ y_aal0)
     = compList
-        [(compare x_aakL) y_aakT, (compare x_aakM) y_aakU,
-          (compare x_aakN) y_aakV, (compare x_aakO) y_aakW,
-          (compare x_aakP) y_aakX, (compare x_aakQ) y_aakY,
+        [(compare x_aakL) y_aakT, (compare x_aakM) y_aakU, (compare x_aakN) y_aakV,
           (kcompare x_aakR) y_aakZ, (kcompare x_aakS) y_aal0]
 
 instance (EqHF a_a2wr, EqHF b_a2ws) =>
           EqHF (RecDef a_a2wr b_a2ws) where
   eqHF
-    (RecDef x_aaks x_aakt x_aaku x_aakv x_aakw x_aakx x_aaky x_aakz)
-    (RecDef y_aakA y_aakB y_aakC y_aakD y_aakE y_aakF y_aakG y_aakH)
+    (RecDef x_aaks x_aakt x_aaku x_aaky x_aakz)
+    (RecDef y_aakA y_aakB y_aakC y_aakG y_aakH)
     = and
         [(x_aaks == y_aakA), (x_aakt == y_aakB), (x_aaku == y_aakC),
-          (x_aakv == y_aakD), (x_aakw == y_aakE), (x_aakx == y_aakF),
           (x_aaky `keq` y_aakG), (x_aakz `keq` y_aakH)]
 
 instance (HFunctor a_a2wr, HFunctor b_a2ws, OrdHF a_a2wr, OrdHF b_a2ws) => OrdHF (RecDef a_a2wr b_a2ws) where
   compareHF
-    (RecDef x_aakL x_aakM x_aakN x_aakO x_aakP x_aakQ x_aakR x_aakS)
-    (RecDef y_aakT y_aakU y_aakV y_aakW y_aakX y_aakY y_aakZ y_aal0)
+    (RecDef x_aakL x_aakM x_aakN x_aakR x_aakS)
+    (RecDef y_aakT y_aakU y_aakV y_aakZ y_aal0)
     = compList
-        [(compare x_aakL) y_aakT, (compare x_aakM) y_aakU,
-          (compare x_aakN) y_aakV, (compare x_aakO) y_aakW,
-          (compare x_aakP) y_aakX, (compare x_aakQ) y_aakY,
+        [(compare x_aakL) y_aakT, (compare x_aakM) y_aakU, (compare x_aakN) y_aakV,
           (kcompare x_aakR) y_aakZ, (kcompare x_aakS) y_aal0]
 
 instance (EqHF a_a2xc) => EqHF (TypeDef a_a2xc) where
@@ -447,20 +437,18 @@ instance ShowHF RecordPat where
 instance (HFunctor a_a2ql, HFunctor b_a2qm, ShowHF a_a2ql, ShowHF b_a2qm) =>
           ShowHF (FunDef a_a2ql b_a2qm) where
   showHF
-    (FunDef x_a9OU x_a9OV x_a9OW x_a9OX x_a9OY x_a9OZ x_a9P0 x_a9P1)
+    (FunDef x_a9OU x_a9OV x_a9OW x_a9P0 x_a9P1)
     = (K $ (showConstr
               "FunDef")
-              [show x_a9OU, show x_a9OV, show x_a9OW, show x_a9OX, show x_a9OY,
-              show x_a9OZ, unK x_a9P0, unK x_a9P1])
+              [show x_a9OU, show x_a9OV, show x_a9OW, unK x_a9P0, unK x_a9P1])
 
 instance (HFunctor a_a2rc, HFunctor b_a2rd, ShowHF a_a2rc, ShowHF b_a2rd) =>
           ShowHF (RecDef a_a2rc b_a2rd) where
   showHF
-    (RecDef x_a9P5 x_a9P6 x_a9P7 x_a9P8 x_a9P9 x_a9Pa x_a9Pb x_a9Pc)
+    (RecDef x_a9P5 x_a9P6 x_a9P7 x_a9Pb x_a9Pc)
     = (K $ (showConstr
               "RecDef")
-              [show x_a9P5, show x_a9P6, show x_a9P7, show x_a9P8, show x_a9P9,
-              show x_a9Pa, unK x_a9Pb, unK x_a9Pc])
+              [show x_a9P5, show x_a9P6, show x_a9P7, unK x_a9Pb, unK x_a9Pc])
 
 instance (HFunctor a_a2rX, ShowHF a_a2rX) => ShowHF (TypeDef a_a2rX) where
   showHF (TypeDef x_a9Pf x_a9Pg x_a9Ph)
@@ -512,27 +500,3 @@ instance ShowHF (LabelExpr a_a2zX) where
     = (K $ (showConstr
               "LabelApp")
               [show x_aajq, unK x_aajr])
-{-
-data RowRep :: (* -> *) -> * -> * where
-  RowRep :: Map.Map Label (t TypeKind) -> Maybe Id -> RowRep t RowKind
-
-$(derive [makeHFunctor, makeHFoldable, makeHTraversable, 
-          smartConstructors, smartAConstructors][''RowRep])
-
-{- based on automatically generated code-}
-instance EqHF RowRep where
-  eqHF (RowRep x_afYG x_afYH) (RowRep y_afYI y_afYJ)
-    = and [(Map.toList x_afYG `keqTList` Map.toList y_afYI), (x_afYH == y_afYJ)]
-
-instance OrdHF RowRep where
-  compareHF (RowRep x_afYL x_afYM) (RowRep y_afYN y_afYO)
-    = compList
-        [kcompareTList (Map.toList x_afYL) (Map.toList y_afYN),
-          (compare x_afYM) y_afYO]
-
-instance ShowHF RowRep where
-  showHF (RowRep x_afYQ x_afYR)
-    = (K $ (showConstr
-              "RowRep")
-              [show (Map.map unK x_afYQ), show x_afYR])
--}

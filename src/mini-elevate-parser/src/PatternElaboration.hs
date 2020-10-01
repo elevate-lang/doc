@@ -35,7 +35,7 @@ import Data.Comp.Multi.Term
 import Data.Functor.Compose
 import Data.Comp.Multi.Projection
 import Parser
-
+{-
 data AccessForm = IAccess Id | IFAccess Id Label | IFRAccess Id Label | IRAccess Id deriving (Eq, Ord, Show)
 
 toRAccess :: AccessForm -> AccessForm
@@ -602,4 +602,6 @@ matchString = [r|match exp with <
 
 matchExample = Match (TermId "exp") [(RecordPattern [("Snd",LabelPattern "F"),("Trd",LabelPattern "T")],App (Label "1") (RecordCons [])),(RecordPattern [("Fst",LabelPattern "F"),("Snd",LabelPattern "T")],App (Label "2") (RecordCons [])),(RecordPattern [("Trd",LabelPattern "F")],App (Label "3") (RecordCons [])),(RecordPattern [("Trd",LabelPattern "T")],App (Label "4") (RecordCons []))]-- testRun match matchString
 matchFusionExample = (Match (TermId "x") [(AppPattern "App" (RecordPattern [("Fun",AppPattern "App" (RecordPattern [("Fun",AppPattern "Primitive" (LabelPattern "Map")),("Arg",IdPattern "f")])),("Arg",AppPattern "App" (RecordPattern [("Fun",AppPattern "App" (RecordPattern [("Fun",AppPattern "Primitive" (LabelPattern "Map")),("Arg",IdPattern "g")])),("Arg",IdPattern "x")]))]),App (Label "Success") (App (Label "App") (RecordCons [("Fun",App (Label "App") (RecordCons [("Fun",App (Label "Primitive") (Label "Map")),("Arg",App (Label "Lam") (RecordCons [("Param",App (Label "0") (RecordCons [])),("Body",App (Label "App") (RecordCons [("Fun",TermId "f"),("Arg",App (Label "App") (RecordCons [("Fun",TermId "g"),("Arg",App (Label "Id") (RecordCons [("Name",App (Label "0") (RecordCons []))]))]))]))]))])),("Arg",TermId "x")]))),(MatchAllPattern,App (Label "Failure") (App (Label "1") (RecordCons [])))]) 
+-}
+
 -}

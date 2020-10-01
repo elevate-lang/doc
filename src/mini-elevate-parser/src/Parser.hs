@@ -8,12 +8,14 @@ module Parser where
 import Text.Parsec hiding (label)
 import Text.Parsec.Char
 import Data.Functor.Identity
-import Data.Set as Set
-import Data.Map.Strict as Map
+import qualified Data.Set as Set
+import qualified Data.Map.Strict as Map
 import Text.RawString.QQ
-import Data.List
+import Data.List as List
 import Data.Comp.Multi
 import AST
+import Id
+import qualified Label as L
 
 type Parser m u a = ParsecT String u m a
 
@@ -46,30 +48,30 @@ spaced1 :: (Monad m) => Parser m u a -> Parser m u a
 spaced1 p = many1 space *> p <* many1 space
 
 keywords :: Set.Set Id
-keywords = Set.fromList ["type", "let", "in", "match", "with", "forall", "lam"]
+keywords = Set.fromList (map strId ["type", "let", "in", "match", "with", "forall", "lam"])
 
 initUpperId :: (Monad m) => Parser m u Id
 initUpperId = do
   name <- (:) <$> upper <*> many alphaNum
-  if Set.member name keywords then 
+  if Set.member (strId name) keywords then 
     unexpected (name ++ "is a keyword")
-  else return name
+  else return (strId name)
 
 initLowerId :: (Monad m) => Parser m u Id
 initLowerId = do
   name <- (:) <$> (lower <|> char '\\') <*> many alphaNum
-  if Set.member name keywords then 
+  if Set.member (strId name) keywords then 
     unexpected ("error: " ++ name ++ " is a keyword")
-  else return name
+  else return (strId name)
 
-label :: (Monad m) => Parser m u Label
-label = initUpperId
+label :: (Monad m) => Parser m u L.Label
+label = (L.label . getName) <$> initUpperId
 
-num :: (Monad m) => Parser m u Label
-num = many1 digit
+num :: (Monad m) => Parser m u L.Label
+num = L.label <$> many1 digit
 
 termId :: (Monad m) => Parser m u Id
-termId = initLowerId <|> string "_"
+termId = initLowerId <|> (strId <$> string "_")
 
 typeId :: (Monad m) => Parser m u Id
 typeId = initLowerId
@@ -133,7 +135,7 @@ atomicPattern = (iLabelPat <$> (label <|> num)) <|>
 pattern :: (Monad m) => Parser m u (Fix PatSig ComplexPat)
 pattern = try (iAppPat <$> label <* many space <*> atomicPattern) <|> atomicPattern
 
-recordForm :: (Monad m) => Parser m u [(Label, Fix ExprSig EXPR)]
+recordForm :: (Monad m) => Parser m u [(L.Label, Fix ExprSig EXPR)]
 recordForm = braces (((,) <$> label <* spaced (char ':') <*> term) `sepBy` (try $ spaced (char '|')))
 
 atomicTerm :: (Monad m) => Parser m u (Fix ExprSig EXPR)
@@ -173,29 +175,34 @@ typeDef = iTypeDef <$>
   term
 
 funDefComp :: (Monad m) => Parser m u (Fix ExprSig EXPR)
-funDefComp = uncurry <$> (iFunDef <$>
-  (try (string "let" *> many1 space) *> termId <* many space) <*>
-  (char ':' *> option False (True <$ char '!') <* many space)) <*>
-  option ([], []) (try forall) <*>
-  many (parens ((,) <$> termId <* spaced (char ':') <*> type_) <* spaced (string "->")) <*>
-  (type_ <* spaced (char '=')) <*>
-  (term <* spaced (string "in")) <*>
-  term
+funDefComp = do
+  name <- try (string "let" *> many1 space) *> termId <* many space
+  isCons <- char ':' *> option False (True <$ char '!') <* many space
+  (tv, rv) <- option ([], []) (try forall)
+  (ps, pts) <- unzip <$> many (parens ((,) <$> termId <* spaced (char ':') <*> type_) <* spaced (string "->"))
+  rt <- (type_ <* spaced (char '='))
+  body <- (term <* spaced (string "in"))
+  e <- term
+  let t = (tv, rv, List.foldr iFunType rt pts)
+      f = List.foldr iLamExpr body ps
+  return $ iFunDef name isCons t f e
 
 funDefSimp :: (Monad m) => Parser m u (Fix ExprSig EXPR)
-funDefSimp = iFunDef <$>
-  (try (string "let" *> many1 space) *> termId <* many space) <*>
-  pure False <*> pure [] <*> pure ([] :: [(Id, Fix PresSig PRES)]) <*>
-  many ((, iUnknownType :: Fix TypeSig TypeKind) <$> spaced termId) <*>
-  (iUnknownType <$ spaced (char '=')) <*>
-  (term <* spaced (string "in")) <*>
-  term
+funDefSimp = do
+  name <- try (string "let" *> many1 space) *> termId <* many space
+  ps <- many (spaced termId)
+  spaced (char '=')
+  body <- term <* spaced (string "in")
+  e <- term
+  let t = ([], [] :: [(Id, Fix PresSig PRES)], iUnknownType :: Fix TypeSig TypeKind)
+      f = List.foldr iLamExpr body ps
+  return $ iFunDef name False t f e
 
 funDef :: (Monad m) => Parser m u (Fix ExprSig EXPR)
 funDef = try funDefComp <|> funDefSimp
 
 lamDef :: (Monad m) => Parser m u (Fix ExprSig EXPR)
-lamDef = iLamExpr <$>
+lamDef = flip (List.foldr iLamExpr) <$> 
   (try (string "lam") *> many space *> many1 termId <* spaced (char '=')) <*> term
 
 match :: (Monad m) => Parser m u (Fix ExprSig EXPR)
