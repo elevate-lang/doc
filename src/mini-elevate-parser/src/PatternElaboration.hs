@@ -88,7 +88,7 @@ data MatchChain :: ((* -> *) -> * -> *) -> * -> (* -> *) -> * -> * where
 
 type MatchChainSig e p l = RHSExpr e :+: MatchChain p l
 
-data PatProp = NonVar | Var
+data PatProp = NonVar | Var deriving (Show, Eq, Ord)
 
 type TaggedMatchChainSig e p l = (RHSExpr e :&: RHSId) :+: (MatchChain p l :&: MatchId)
 
@@ -157,6 +157,10 @@ matchChainToList ::
 matchChainToList mc = caseH (return . inj . hfmap (const (K ()))) (\case
     (MatchChainList a (p, xs) :&: ma) -> inj (MatchChainList a (p, K ()) :&: ma) : matchChainToList xs
   ) (unTerm mc)
+
+instance (ShowHF e, HFunctor e) => Show (TaggedMatchChainSig e SimplePatSig SimplePat (K ()) ListModel) where
+  show m = caseH (\((RHSExpr rhs) :&: i) -> "RHSExpr " ++ (show rhs) ++ (show i)) (\case
+    ((MatchChainList a (p, K ())) :&: i) -> "MatchChainList " ++ (show a) ++ " " ++ (show p) ++ (show i)) m
 
 {- PATTERN EXPANSION -}
 patExpansion :: (MonadState PEState m, MonadReader (PERead e) m) =>
