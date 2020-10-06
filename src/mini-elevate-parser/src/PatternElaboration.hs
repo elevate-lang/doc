@@ -299,9 +299,6 @@ executePatternExpansion expr n = runCase [
     exprCase = lCase
 
 -- Test tagging
-executePatExpAndTag match = do 
-  list <- (executePatternExpansion match 0)
-  return (map matchChainTagging list)
 
 patternElaboration :: Fix ExprSig EXPR -> Fix ExprSig EXPR
 patternElaboration m = undefined
