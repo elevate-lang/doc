@@ -154,6 +154,7 @@ runSolver cs = do
 instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m, 
   Occurs ("NameCounter" :- IORef Int) ts HList,
   Update ("TypeEnv" :- TypeEnv) ts HList,
+  Occurs ("IsVisible" :- Bool) ts HList,
   MonadReader (HList ts) m, Expr :<: g, DistAnn g TypeRep h) => Infer Expr h m where
 
   inferAlg (IdExpr x) = Compose $ do
@@ -176,6 +177,8 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
 
   inferAlg (LamExpr param body) = Compose $ do
     paramType <- genFreshIdType Type
+    isVisible <- select @"IsVisible" @Bool <$> ask
+    when isVisible (setVisible paramType)
     let intro = Map.singleton param (Forall Set.empty paramType)
     body' <- local (HList.modify @"TypeEnv" @TypeEnv (extendTypeEnv intro)) (getCompose body)
     let bodyType = getType body'
@@ -183,14 +186,19 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
     -- liftIO $ putStrLn =<< showTypeRep lamType
     return $ iALamExpr lamType param body'
 
+  -- [] :: forall a. [a]
+  -- length :: forall a. [a] -> Int
+  -- (length :: [b] -> Int) ([] :: [b]) :: Int
+
 instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m, 
   Occurs ("NameCounter" :- IORef Int) ts HList,
   Update ("TypeEnv" :- TypeEnv) ts HList,
+  Update ("IsVisible" :- Bool) ts HList,
   MonadReader (HList ts) m, FunDef InferPresSig InferTypeSig :<: g, DistAnn g TypeRep h) => 
   Infer (FunDef InferPresSig InferTypeSig) h m where
 
   inferAlg (FunDef name c t f e) = Compose $ do
-    (f', cs) <- listen (getCompose f)
+    (f', cs) <- listen (local (HList.modify @"IsVisible" @Bool (const True)) (getCompose f))
     let funType = getType f'
     runSolver cs
     -- liftIO $ putStrLn =<< showTypeRep funType
@@ -203,13 +211,17 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
 instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m, 
   Occurs ("NameCounter" :- IORef Int) ts HList,
   Update ("TypeEnv" :- TypeEnv) ts HList,
+  Update ("IsVisible" :- Bool) ts HList,
   MonadReader (HList ts) m, RecDef InferPresSig InferTypeSig :<: g, DistAnn g TypeRep h) => 
   Infer (RecDef InferPresSig InferTypeSig) h m where
 
   inferAlg (RecDef name c t f e) = Compose $ do
     self <- genFreshIdType Type
+    setVisible self
     let intro = Map.singleton name (Forall Set.empty self)
-    (f', cs) <- listen (local (HList.modify @"TypeEnv" @TypeEnv (extendTypeEnv intro)) (getCompose f))
+    (f', cs) <- listen (local (
+      HList.modify @"IsVisible" @Bool (const True) .
+      HList.modify @"TypeEnv" @TypeEnv (extendTypeEnv intro)) (getCompose f))
     let funType = getType f'
         cs' = (self, funType) : cs
     runSolver cs'
@@ -284,6 +296,7 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
     return $ iARecordCons t fields'
   inferAlg _ = Compose $ Fail.fail "TODO"
 
+{-
 instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m, 
   Occurs ("NameCounter" :- IORef Int) ts HList,
   Update ("TypeEnv" :- TypeEnv) ts HList,
@@ -304,6 +317,50 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
     (rest, cases') <- second reverse <$> foldM process (Just eType, []) cases
     emptyRow <- typeRep (IdTypeRep (tIdRep (strId "*") (RowPres L.empty)))
     emptyType <- typeRep (VariantRep emptyRow)
+    case rest of
+      Just t -> tell [(t, emptyType)]
+      Nothing -> return ()
+    return $ iAMatch rhsIdType e' cases'
+-}
+
+isInvisibleVariant :: (MonadIO m) => TypeRep -> m Bool
+isInvisibleVariant t = do
+  dtv <- liftIO $ UF.find' t
+  case structure dtv of
+    VariantRep r -> do
+      drv <- liftIO $ UF.find' r
+      case structure drv of
+        IdTypeRep _ -> return (not (isVisible drv))
+        _ -> return False
+    _ -> return False
+
+instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m, 
+  Occurs ("NameCounter" :- IORef Int) ts HList,
+  Update ("TypeEnv" :- TypeEnv) ts HList,
+  MonadReader (HList ts) m, Match InferPatSig SimplePat :<: g, DistAnn g TypeRep h) => 
+  Infer (Match InferPatSig SimplePat) h m where
+  inferAlg (Match e cases) = Compose $ do
+    emptyRow <- typeRep (IdTypeRep (tIdRep (strId "*") (RowPres L.empty)))
+    emptyType <- typeRep (VariantRep emptyRow)
+    (e', cs) <- listen (getCompose e)
+    runSolver cs
+    rhsIdType <- genFreshIdType Type 
+    let eType = getType e'
+    let process (Nothing, _) _ = Fail.fail "redundant case"
+        process (Just t, cases') (p, rhs) = do
+          (patType, rest, intro) <- unK (cata patInferAlg p)
+          runSolver [(t, patType)]
+          rest' <- case rest of
+            Just t -> do
+              invisible <- isInvisibleVariant t
+              if invisible then runSolver [(t, emptyType)] >> return Nothing
+              else return (Just t)
+            Nothing -> return Nothing
+          rhs' <- local (HList.modify @"TypeEnv" @TypeEnv (extendTypeEnv intro)) (getCompose rhs)
+          let rhsType = getType rhs'
+          tell [(rhsType, rhsIdType)]
+          return (rest', (p, rhs') : cases')
+    (rest, cases') <- second reverse <$> foldM process (Just eType, []) cases
     case rest of
       Just t -> tell [(t, emptyType)]
       Nothing -> return ()
@@ -347,9 +404,14 @@ testExpr4 =
     iAppExpr (iAppExpr (iIdExpr alter) (iAppExpr (iIdExpr fs) (iIdExpr x))) (iAppExpr (iIdExpr ss) (iIdExpr x)))))) $
   
   iFunDef id False noCons (iLamExpr x (iLabelApp (L.label "Success") (iIdExpr x))) $
+
+  iFunDef fail False noCons (iLamExpr x (iLabelApp (L.label "Failure") (iLabelApp (L.label "MSG") (iRecordCons [])))) $
   
   iFunDef try False noCons (iLamExpr s (iAppExpr (iAppExpr (iIdExpr lChoice) (iIdExpr s)) (iIdExpr id))) $
   
+  iFunDef test False noCons (iLamExpr x (iMatch (iAppExpr (iAppExpr (iIdExpr try) (iIdExpr fail)) (iIdExpr x)) [
+    (iAppIdPat (L.label "Success") a :: Fix InferPatSig SimplePat, iLabelApp (L.label "OK") (iRecordCons []))])) $
+
   iIdExpr try
 
   where flatMap = strId "flatMap"
@@ -357,7 +419,9 @@ testExpr4 =
         seq = strId "seq"
         lChoice = strId "lChoice"
         id = strId "id"
+        fail = strId "fail"
         try = strId "try"
+        test = strId "test"
         a = strId "a"
         b = strId "b"
         f = strId "f"
@@ -370,8 +434,8 @@ testExpr4 =
 testInfer :: Fix TestSig EXPR -> IO ()
 testInfer prog = do
   c <- newIORef 0
-  let cxt :: HList '["NameCounter" :- IORef Int, "TypeEnv" :- TypeEnv]
-      cxt = Field c :| Field (TypeEnv Map.empty) :| HNil
+  let cxt :: HList '["NameCounter" :- IORef Int, "TypeEnv" :- TypeEnv, "IsVisible" :- Bool]
+      cxt = Field c :| Field (TypeEnv Map.empty) :| Field False :| HNil
   r <- runExceptT (fmap fst $ runWriterT (flip runReaderT cxt (getCompose (cata inferAlg prog))))
   case r of
     Right (r :: Fix ((RecDef InferPresSig InferTypeSig :&: TypeRep) :+: (FunDef InferPresSig InferTypeSig :&: TypeRep) :+: (Expr :&: TypeRep) :+: (Match InferPatSig SimplePat :&: TypeRep) :+: (LabelExpr LabelAsFun :&: TypeRep) :+: (RecordOps :&: TypeRep)) EXPR) -> do

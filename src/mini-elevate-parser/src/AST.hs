@@ -460,7 +460,7 @@ instance ShowHF RecordOps where
   showHF (RecordCons x_a9Pn)
     = (K $ (showConstr
               "RecordCons")
-              [show $ map (second unK) x_a9Pn])
+              [intercalate ", " $ map (\(a, b) -> "(" ++ show a ++ ", " ++ unK b ++ ")") x_a9Pn])
   showHF (FieldAccess x_a9Po x_a9Pp)
     = (K $ (showConstr
               "FieldAccess")
