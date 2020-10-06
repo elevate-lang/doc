@@ -44,6 +44,9 @@ import qualified Control.Monad.Fail as Fail
 import Control.Monad.Trans.Except
 import Util
 
+import HList as HL
+import Data.IORef
+
 data AccessForm = IAccess Id | IFAccess Id Label | IFRAccess Id Label | IRAccess Id deriving (Eq, Ord, Show)
 
 toRAccess :: AccessForm -> AccessForm
@@ -241,6 +244,7 @@ patExpansion delta p = do
       (f (Fix ComplexPatSig) ComplexPat -> y) -> Fix ComplexPatSig ComplexPat -> Maybe y
     patCase = flip lCase
 
+-- TODO match chain grouping
 {- TESTING -}
 astToAccess :: Fix ExprSig EXPR -> AccessForm
 astToAccess expr = runCase [
@@ -294,6 +298,11 @@ executePatternExpansion expr n = runCase [
       Fix ExprSig EXPR -> (f (Fix ExprSig) EXPR -> y) -> Maybe y
     exprCase = lCase
 
+-- Test tagging
+executePatExpAndTag match = do 
+  list <- (executePatternExpansion match 0)
+  return (map matchChainTagging list)
+
 patternElaboration :: Fix ExprSig EXPR -> Fix ExprSig EXPR
 patternElaboration m = undefined
 
@@ -315,7 +324,6 @@ matchString2 = [r|match x with <
 matchExample1 :: Fix ExprSig EXPR
 matchExample1 = head (rights [testRun match matchString1])
 
--- TODO: this example is not able to run
 matchExample2 :: Fix ExprSig EXPR
 matchExample2 = head (rights [testRun match matchString2])
 
