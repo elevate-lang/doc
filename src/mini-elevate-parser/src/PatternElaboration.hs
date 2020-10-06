@@ -139,10 +139,9 @@ instance (ShowHF e, HFunctor e) => Show (TaggedMatchChainSig e SimplePatSig Simp
     ((MatchChainList a (p, K ())) :&: i) -> "MatchChainList " ++ (show a) ++ " " ++ (show p) ++ (show i)) m
 
 {- PATTERN EXPANSION -}
-patExpansion :: forall ts e m. (MonadState MatchId m,
-  Occurs ("NameCounter" :- IORef Int) ts HList,
+patExpansion :: forall ts e m. (Occurs ("NameCounter" :- IORef Int) ts HList,
   Update ("RHSId" :- MatchId) ts HList,
-  {- Update ("MatchId" :- MatchId) ts HList,-}
+  Update ("MatchId" :- MatchId) ts HList,
   Update ("LabelSet" :- Set.Set Label) ts HList,
   Update ("Var" :- Id) ts HList,
   Update ("RHSTerm" :- Fix e EXPR) ts HList, 
@@ -157,22 +156,19 @@ patExpansion delta p = runCase [
       freshName <- liftIO $ (("#a" ++) . show) <$> readIORef counter
       liftIO $ modifyIORef counter (+ 1)
       le <- select @"RHSId" @(MatchId) <$> ask
-      -- l <- select @"MatchId" @(MatchId) <$> ask
-      l <- get
+      l <- select @"MatchId" @(MatchId) <$> ask
       rhs <- select @"RHSTerm" @(Fix e EXPR) <$> ask
       return $ iAMatchChainList l delta (iIdPat freshName :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
   ),
   patCase @Pat p (\case
     IdPat v -> do
       le <- select @"RHSId" @(MatchId) <$> ask
-      -- l <- select @"MatchId" @(MatchId) <$> ask
-      l <- get
+      l <- select @"MatchId" @(MatchId) <$> ask
       rhs <- select @"RHSTerm" @(Fix e EXPR) <$> ask
       return $ iAMatchChainList l delta (iIdPat v :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
     LabelPat label -> do
       le <- select @"RHSId" @(MatchId) <$> ask
-      -- l <- select @"MatchId" @(MatchId) <$> ask
-      l <- get
+      l <- select @"MatchId" @(MatchId) <$> ask
       rhs <- select @"RHSTerm" @(Fix e EXPR) <$> ask
       return $ iAMatchChainList l delta (iLabelPat label :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
   ),
@@ -180,8 +176,7 @@ patExpansion delta p = runCase [
     -- l v
     AppIdPat label v -> do
       le <- select @"RHSId" @(MatchId) <$> ask
-      -- l <- select @"MatchId" @(MatchId) <$> ask
-      l <- get
+      l <- select @"MatchId" @(MatchId) <$> ask
       rhs <- select @"RHSTerm" @(Fix e EXPR) <$> ask
       return $ iAMatchChainList l delta (iAppIdPat label v :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
     -- l pi
@@ -194,11 +189,9 @@ patExpansion delta p = runCase [
             freshName <- liftIO $ (("#a" ++) . show) <$> readIORef counter
             liftIO $ modifyIORef counter (+ 1)
             le <- select @"RHSId" @(MatchId) <$> ask
-            -- l <- select @"MatchId" @(MatchId) <$> ask
-            l <- get
+            l <- select @"MatchId" @(MatchId) <$> ask
             let l' = l ++ [0]
-            put l'
-            cxt <- {- HL.modify @"MatchId" @(MatchId) (\l -> l') <$> -} HL.modify @"Var" @(Id) (\a -> freshName) <$> HL.modify @"LabelSet" @(Set.Set Label) (\s -> Set.empty) <$> ask
+            cxt <- HL.modify @"MatchId" @(MatchId) (\l -> l') <$> HL.modify @"Var" @(Id) (\a -> freshName) <$> HL.modify @"LabelSet" @(Set.Set Label) (\s -> Set.empty) <$> ask
             chain <- local (\r -> cxt) (patExpansion (IAccess freshName) p)
             return $ iAMatchChainList l delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, chain)
         ),
@@ -209,11 +202,9 @@ patExpansion delta p = runCase [
             freshName <- liftIO $ (("#a" ++) . show) <$> readIORef counter
             liftIO $ modifyIORef counter (+ 1)
             le <- select @"RHSId" @(MatchId) <$> ask
-            -- l <- select @"MatchId" @(MatchId) <$> ask
-            l <- get
+            l <- select @"MatchId" @(MatchId) <$> ask
             let l' = l ++ [0]
-            put l'
-            cxt <- {- HL.modify @"MatchId" @(MatchId) (\l -> l') <$> -} HL.modify @"Var" @(Id) (\a -> freshName) <$> HL.modify @"LabelSet" @(Set.Set Label) (\s -> Set.empty) <$> ask
+            cxt <- HL.modify @"MatchId" @(MatchId) (\l -> l') <$> HL.modify @"Var" @(Id) (\a -> freshName) <$> HL.modify @"LabelSet" @(Set.Set Label) (\s -> Set.empty) <$> ask
             chain <- local (\r -> cxt) (patExpansion (IAccess freshName) p)
             return $ iAMatchChainList l delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, chain)
         ),
@@ -224,11 +215,9 @@ patExpansion delta p = runCase [
             freshName <- liftIO $ (("#a" ++) . show) <$> readIORef counter
             liftIO $ modifyIORef counter (+ 1)
             le <- select @"RHSId" @(MatchId) <$> ask
-            -- l <- select @"MatchId" @(MatchId) <$> ask
-            l <- get
+            l <- select @"MatchId" @(MatchId) <$> ask
             let l' = l ++ [0]
-            put l'
-            cxt <- {- HL.modify @"MatchId" @(MatchId) (\l -> l') <$> -} HL.modify @"Var" @(Id) (\a -> freshName) <$> HL.modify @"LabelSet" @(Set.Set Label) (\s -> Set.empty) <$> ask
+            cxt <- HL.modify @"MatchId" @(MatchId) (\l -> l') <$> HL.modify @"Var" @(Id) (\a -> freshName) <$> HL.modify @"LabelSet" @(Set.Set Label) (\s -> Set.empty) <$> ask
             chain <- local (\r -> cxt) (patExpansion (IAccess freshName) p)
             return $ iAMatchChainList l delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, chain)
         ),
@@ -240,8 +229,7 @@ patExpansion delta p = runCase [
             freshName <- liftIO $ (("#a" ++) . show) <$> readIORef counter
             liftIO $ modifyIORef counter (+ 1)
             le <- select @"RHSId" @(MatchId) <$> ask
-            -- l <- select @"MatchId" @(MatchId) <$> ask
-            l <- get
+            l <- select @"MatchId" @(MatchId) <$> ask
             rhs <- select @"RHSTerm" @(Fix e EXPR) <$> ask
             return $ iAMatchChainList l delta (iAppIdPat label freshName :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
         )]     
@@ -255,8 +243,7 @@ patExpansion delta p = runCase [
         freshName <- liftIO $ (("#a" ++) . show) <$> readIORef counter
         liftIO $ modifyIORef counter (+ 1)
         le <- select @"RHSId" @(MatchId) <$> ask
-        -- l <- select @"MatchId" @(MatchId) <$> ask
-        l <- get
+        l <- select @"MatchId" @(MatchId) <$> ask
         rhs <- select @"RHSTerm" @(Fix e EXPR) <$> ask
         return $ iAMatchChainList l (toRAccess delta) (iIdPat freshName :: Fix SimplePatSig SimplePat, iARHSExpr le rhs)
       ((label, pattern) : xs) -> case delta of 
@@ -280,15 +267,12 @@ patExpansion delta p = runCase [
                     then Fail.fail ("Error: label duplication: " ++ (show label))
                     else do
                       let newlabelSet = Set.insert label labelSet
-                      chain2 <- patExpansion (IFRAccess v label) pattern
                       le <- select @"RHSId" @(MatchId) <$> ask
-                      -- l <- select @"MatchId" @(MatchId) <$> ask
-                      l <- get
+                      l <- select @"MatchId" @(MatchId) <$> ask
                       let l' = (Prelude.take (length l - 1) l) ++ [(last l + 1)]
-                      put l'
-                      cxt <- {- HL.modify @"MatchId" @(MatchId) (\l -> l') <$> -} HL.modify @"LabelSet" @(Set.Set Label) (\s -> newlabelSet) <$> ask
-                      -- we can't change the order here cuz the match id need to be updated before generating chain1
+                      cxt <- HL.modify @"MatchId" @(MatchId) (\l -> l') <$> HL.modify @"LabelSet" @(Set.Set Label) (\s -> newlabelSet) <$> ask
                       chain1 <- local (\r -> cxt) (patExpansion (IAccess v) (iRecordPat xs))
+                      chain2 <- patExpansion (IFRAccess v label) pattern
                       return (replaceTail chain2 chain1)
             else do
               -- get fresh name and update counter
@@ -296,11 +280,9 @@ patExpansion delta p = runCase [
               freshName <- liftIO $ (("#a" ++) . show) <$> readIORef counter
               liftIO $ modifyIORef counter (+ 1)
               le <- select @"RHSId" @(MatchId) <$> ask
-              -- l <- select @"MatchId" @(MatchId) <$> ask
-              l <- get
+              l <- select @"MatchId" @(MatchId) <$> ask
               let l' = l ++ [0]
-              put l'
-              cxt <- {-HL.modify @"MatchId" @(MatchId) (\l -> l') <$> -} HL.modify @"LabelSet" @(Set.Set Label) (\s -> Set.empty) <$> HL.modify @"Var" @(Id) (\a -> freshName) <$> ask
+              cxt <- HL.modify @"MatchId" @(MatchId) (\l -> l') <$> HL.modify @"LabelSet" @(Set.Set Label) (\s -> Set.empty) <$> HL.modify @"Var" @(Id) (\a -> freshName) <$> ask
               chain <- local (\r -> cxt) (patExpansion (IAccess freshName) (iRecordPat ps))
               return $ iAMatchChainList l (toRAccess delta) (iIdPat freshName :: Fix SimplePatSig SimplePat, chain)
         _ -> do
@@ -309,11 +291,9 @@ patExpansion delta p = runCase [
           freshName <- liftIO $ (("#a" ++) . show) <$> readIORef counter
           liftIO $ modifyIORef counter (+ 1)
           le <- select @"RHSId" @(MatchId) <$> ask
-          -- l <- select @"MatchId" @(MatchId) <$> ask
-          l <- get
+          l <- select @"MatchId" @(MatchId) <$> ask
           let l' = l ++ [0]
-          put l'
-          cxt <- {- HL.modify @"MatchId" @(MatchId) (\l -> l') <$> -} HL.modify @"LabelSet" @(Set.Set Label) (\s -> Set.empty) <$> HL.modify @"Var" @(Id) (\a -> freshName) <$> ask
+          cxt <- HL.modify @"MatchId" @(MatchId) (\l -> l') <$> HL.modify @"LabelSet" @(Set.Set Label) (\s -> Set.empty) <$> HL.modify @"Var" @(Id) (\a -> freshName) <$> ask
           chain <- local (\r -> cxt) (patExpansion (IAccess freshName) (iRecordPat ps))
           return $ iAMatchChainList l (toRAccess delta) (iIdPat freshName :: Fix SimplePatSig SimplePat, chain)
   )]
@@ -441,10 +421,10 @@ executePatternExpansion expr n = runCase [
       [] -> return []
       ((p, l) : xs) -> do
         c <- liftIO $ newIORef 0
-        let cxt :: HList '["NameCounter" :- IORef Int, "RHSId" :- MatchId, "LabelSet" :- Set.Set Label, "Var" :- Id, "RHSTerm" :- Fix ExprSig EXPR]
-            cxt = Field c :| Field [n] :| Field Set.empty :| Field "" :| Field l :| HNil
+        let cxt :: HList '["NameCounter" :- IORef Int, "RHSId" :- MatchId, "MatchId" :- MatchId, "LabelSet" :- Set.Set Label, "Var" :- Id, "RHSTerm" :- Fix ExprSig EXPR]
+            cxt = Field c :| Field [n] :| Field [n] :| Field Set.empty :| Field "" :| Field l :| HNil
         tail <- (executePatternExpansion (iMatch exp xs) (n + 1))
-        (flip evalStateT [n] . flip runReaderT cxt $ patExpansion (astToAccess exp) p) >>= (\x -> return (x : tail))
+        (flip runReaderT cxt $ patExpansion (astToAccess exp) p) >>= (\x -> return (x : tail))
   ),
   exprCase @Expr expr (\case
     _ -> Fail.fail "Not a match expression"
