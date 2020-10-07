@@ -341,11 +341,20 @@ matchString2 = [r|match x with <
   | _ => Failure 1
 >|]
 
+matchString3 :: String
+matchString3 =[r|match x with <
+    Success a => f a
+  | Failure b => Failure b
+>|]
+
 matchExample1 :: Fix ExprSig EXPR
 matchExample1 = head (rights [testRun match matchString1])
 
 matchExample2 :: Fix ExprSig EXPR
 matchExample2 = head (rights [testRun match matchString2])
+
+matchExample3 :: Fix ExprSig EXPR
+matchExample3 = head (rights [testRun match matchString3])
 
 testPE :: Fix ExprSig EXPR -> IO ()
 testPE p = do
