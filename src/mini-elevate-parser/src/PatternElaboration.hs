@@ -141,7 +141,7 @@ listToMatchChain :: forall e.
   [TaggedMatchChainSig e SimplePatSig SimplePat (K ()) ListModel] ->
   Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel
 listToMatchChain ls = foldr roll (error "empty chain") ls
-  where roll now acc = caseH 
+  where roll now acc = caseH
           (\(RHSExpr e :&: rhsId) -> iARHSExpr rhsId e :: Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel)
           (\(MatchChainList a (p, _) :&: matchId) -> iAMatchChainList matchId a (p, acc)) now
 
@@ -253,7 +253,22 @@ patExpansion delta p = do
       (f (Fix ComplexPatSig) ComplexPat -> y) -> Fix ComplexPatSig ComplexPat -> Maybe y
     patCase = flip lCase
 
--- TODO match chain grouping
+matchChainReversing :: (t ~ [TaggedMatchChainSig e SimplePatSig SimplePat (K ()) ListModel]) => (t, t) -> t
+matchChainReversing ([], chainAccum) = chainAccum
+matchChainReversing ((c : chain), chainAccum) = caseH 
+  (\((RHSExpr rhs) :&: i) -> chainAccum) 
+  (\((MatchChainList a (p, K ())) :&: i) -> matchChainReversing (chain, (c : chainAccum))) c
+
+matchChainGrouping :: (t ~ [TaggedMatchChainSig e SimplePatSig SimplePat (K ()) ListModel]) =>
+  (JudgedMatchChain e, t) -> t
+matchChainGrouping (tchain, chain) = case tchain of 
+  [] -> (error "empty chainT")
+  (prop, c) : xs -> case prop of
+    Var -> caseH (\case
+      ((RHSExpr rhs) :&: i) -> matchChainReversing (chain, [c])) (\case
+      ((MatchChainList a (p, K ())) :&: i) -> matchChainGrouping (xs, (c : chain))) c
+    NonVar -> c : (matchChainGrouping (xs, chain))
+
 {- TESTING -}
 astToAccess :: Fix ExprSig EXPR -> AccessForm
 astToAccess expr = runCase [
@@ -307,8 +322,6 @@ executePatternExpansion expr n = runCase [
       Fix ExprSig EXPR -> (f (Fix ExprSig) EXPR -> y) -> Maybe y
     exprCase = lCase
 
--- Test tagging
-
 patternElaboration :: Fix ExprSig EXPR -> Fix ExprSig EXPR
 patternElaboration m = undefined
 
@@ -327,17 +340,34 @@ matchString2 = [r|match x with <
   | _ => Failure 1
 >|]
 
+matchString3 :: String
+matchString3 =[r|match x with <
+    Success a => f a
+  | Failure b => Failure b
+>|]
+
 matchExample1 :: Fix ExprSig EXPR
 matchExample1 = head (rights [testRun match matchString1])
 
 matchExample2 :: Fix ExprSig EXPR
 matchExample2 = head (rights [testRun match matchString2])
 
+matchExample3 :: Fix ExprSig EXPR
+matchExample3 = head (rights [testRun match matchString3])
+
 testPE :: Fix ExprSig EXPR -> IO ()
 testPE p = do
   r <- runExceptT (executePatternExpansion p 0)
   case r of
     Right r -> print r
+    Left m -> putStrLn m
+
+testSorting :: Fix ExprSig EXPR -> IO () 
+testSorting p = do
+  r <- runExceptT (executePatternExpansion p 0)
+  case r of
+    Right r -> do
+      print (map (\xs -> listToMatchChain (matchChainGrouping (xs, []))) r)
     Left m -> putStrLn m
 
 {-
@@ -367,4 +397,44 @@ testPE p = do
 (Var,MatchChainList IFAccess #a2 Arg (IdPat g)[0,1,0,1])
 (Var,MatchChainList IFAccess #a1 Arg (IdPat x)[0,1,1])
 (Var,RHSExpr)
+
+(Var,MatchChainList IAccess x (IdPat #a0)[1]),
+(Var,RHSExpr)
+-}
+
+{- 
+*** sorting example one ***
+[(MatchChainList IRAccess exp ((IdPat #a0), 
+ (MatchChainList IFAccess #a0 Snd ((LabelPat F), 
+ (MatchChainList IFAccess #a0 Trd ((LabelPat T), 
+ (RHSExpr (AppExpr (LabelLit 1) (RecordCons ))) :&: [0])) :&: [0,1])) :&: [0,0])) :&: [0],
+
+ (MatchChainList IRAccess exp ((IdPat #a0), 
+ (MatchChainList IFAccess #a0 Fst ((LabelPat F), 
+ (MatchChainList IFAccess #a0 Snd ((LabelPat T), 
+ (RHSExpr (AppExpr (LabelLit 2) (RecordCons ))) :&: [1])) :&: [1,1])) :&: [1,0])) :&: [1],
+
+ (MatchChainList IRAccess exp ((IdPat #a0), (MatchChainList IFAccess #a0 Trd ((LabelPat F), 
+ (RHSExpr (AppExpr (LabelLit 3) (RecordCons ))) :&: [2])) :&: [2,0])) :&: [2],
+
+ (MatchChainList IRAccess exp ((IdPat #a0), (MatchChainList IFAccess #a0 Trd ((LabelPat T), 
+ (RHSExpr (AppExpr (LabelLit 4) (RecordCons ))) :&: [3])) :&: [3,0])) :&: [3]]
+
+*** sorting example two ***
+[(MatchChainList IAccess x ((AppIdPat App #a0), 
+ (MatchChainList IFAccess #a0 Fun ((AppIdPat App #a4), 
+ (MatchChainList IFAccess #a4 Fun ((AppIdPat Primitive #a5), 
+ (MatchChainList IAccess #a5 ((LabelPat Map), 
+ (MatchChainList IFAccess #a0 Arg ((AppIdPat App #a1), 
+ (MatchChainList IFAccess #a1 Fun ((AppIdPat App #a2), 
+ (MatchChainList IFAccess #a2 Fun ((AppIdPat Primitive #a3), 
+ (MatchChainList IAccess #a3 ((LabelPat Map), 
+ (MatchChainList IFAccess #a4 Arg ((IdPat f), 
+ (MatchChainList IFAccess #a2 Arg ((IdPat g), 
+ (MatchChainList IFAccess #a1 Arg ((IdPat x), 
+ (RHSExpr (AppExpr (LabelLit Success) (AppExpr (LabelLit App) (RecordCons (Fun, (AppExpr (LabelLit App) (RecordCons (Fun, (AppExpr (LabelLit Primitive) (LabelLit Map))), (Arg, (AppExpr (LabelLit Lam) (RecordCons (Param, (AppExpr (LabelLit 0) (RecordCons ))), (Body, (AppExpr (LabelLit App) (RecordCons (Fun, (IdExpr f)), (Arg, (AppExpr (LabelLit App) (RecordCons (Fun, (IdExpr g)), (Arg, (AppExpr (LabelLit Id) (RecordCons (Name, (AppExpr (LabelLit 0) (RecordCons )))))))))))))))))), (Arg, (IdExpr x)))))) 
+ :&: [0])) :&: [0,1,1])) :&: [0,1,0,1])) :&: [0,0,1])) :&: [0,1,0,0,0])) :&: [0,1,0,0])) :&: [0,1,0])) :&: [0,1])) :&: [0,0,0,0])) :&: [0,0,0])) :&: [0,0])) :&: [0],
+ 
+ (MatchChainList IAccess x ((IdPat #a0), 
+ (RHSExpr (AppExpr (LabelLit Failure) (AppExpr (LabelLit 1) (RecordCons )))) :&: [1])) :&: [1]]
 -}
