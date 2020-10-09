@@ -17,6 +17,7 @@ import Text.RawString.QQ
 import qualified Data.Vec.Lazy as VL
 import Data.Type.Nat hiding (toNatural, cata)
 import qualified Data.Set as Set
+import qualified Data.Map.Strict as Map
 import Control.Monad
 import Control.Monad.Reader
 import Control.Monad.State
@@ -47,6 +48,7 @@ import Util
 import HList as HL
 import Data.IORef
 import Data.List
+import Data.Foldable
 
 data AccessForm = IAccess Id | IFAccess Id Label | IFRAccess Id Label | IRAccess Id deriving (Eq, Ord, Show)
 
@@ -269,6 +271,66 @@ matchChainGrouping (tchain, chain) = case tchain of
       ((MatchChainList a (p, K ())) :&: i) -> matchChainGrouping (xs, (c : chain))) c
     NonVar -> c : (matchChainGrouping (xs, chain))
 
+type Subst e l = Map.Map Id (Fix e l)
+
+class Substitutable f g m where
+  substAlg :: Alg f (Compose m (Fix g))
+
+$(derive [liftSum] [''Substitutable])
+
+class ContainFV f where
+  fvAlg :: Alg f (K (Set.Set Id))
+
+$(derive [liftSum] [''ContainFV])
+
+instance ContainFV Expr where
+  fvAlg (IdExpr x) = K $ Set.singleton x
+  fvAlg (AppExpr fun arg) = K $ Set.union (unK fun) (unK arg)
+  fvAlg (LamExpr param body) = K $ Set.delete param (unK body)
+
+instance (Update ("Subst" :- Subst g EXPR) ts HList,
+  MonadIO m, Occurs ("NameCounter" :- IORef Int) ts HList,
+  MonadReader (HList ts) m, 
+  HFunctor g, Expr :<: g, ContainFV g) => Substitutable Expr g m where
+  substAlg (IdExpr x) = Compose $ do
+    subst <- select @"Subst" @(Subst g EXPR) <$> ask
+    case Map.lookup x subst of
+      Nothing -> return $ iIdExpr x
+      Just e -> return e
+  substAlg (AppExpr fun arg) = Compose $ do
+    fun' <- getCompose fun
+    arg' <- getCompose arg
+    return $ iAppExpr fun' arg'
+  substAlg (LamExpr param body) = Compose $ do
+    subst <- select @"Subst" @(Subst g EXPR) <$> ask
+    let fv = fold (Map.map (unK . cata fvAlg) subst)
+    if Set.member param fv then do
+      freshId <- genFreshId "#x"
+      let updateCxt = Map.insert param (iIdExpr freshId)
+      body' <- local (HL.modify @"Subst" @(Subst g EXPR) updateCxt) (getCompose body)
+      return $ iLamExpr freshId body'
+    else do
+      let updateCxt = Map.delete param
+      body' <- local (HL.modify @"Subst" @(Subst g EXPR) updateCxt) (getCompose body)
+      return $ iLamExpr param body'
+
+
+instance (Update ("Subst" :- Subst g EXPR) ts HList,
+  MonadIO m, Occurs ("NameCounter" :- IORef Int) ts HList,
+  MonadReader (HList ts) m, 
+  HFunctor g, (FunDef p t) :<: g, ContainFV g) => Substitutable (FunDef p t) g m where
+  substAlg (FunDef name c t f e) = Compose $ do
+    subst <- select @"Subst" @(Subst g EXPR) <$> ask
+    let fv = fold (Map.map (unK . cata fvAlg) subst)
+    if Set.member name fv then do
+      freshId <- genFreshId "#x"
+      let updateCxt = Map.insert param (iIdExpr freshId)
+      body' <- local (HL.modify @"Subst" @(Subst g EXPR) updateCxt) (getCompose body)
+      return $ iLamExpr freshId body'
+    else do
+      let updateCxt = Map.delete param
+      body' <- local (HL.modify @"Subst" @(Subst g EXPR) updateCxt) (getCompose body)
+      return $ iLamExpr param body'
 {- TESTING -}
 astToAccess :: Fix ExprSig EXPR -> AccessForm
 astToAccess expr = runCase [
