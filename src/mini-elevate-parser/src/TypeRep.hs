@@ -83,12 +83,11 @@ type TypeRep = UF.Point TypeDesc
 data TypeDesc = TypeDesc {
   structure :: TypeRepF TypeRep,
   isType :: Bool,
-  visited :: Int,
-  isVisible :: Bool
+  visited :: Int
 }
 
 typeDesc :: TypeRepF TypeRep -> TypeDesc
-typeDesc t = TypeDesc t False 0 False
+typeDesc t = TypeDesc t False 0
 
 typeRep :: (MonadIO m) => TypeRepF TypeRep -> m TypeRep
 typeRep t = liftIO $ UF.fresh (typeDesc t)
@@ -202,13 +201,3 @@ showTypeRep t = do
       recId <- genFreshId "t"
       s <- local (HList.modify @"RecIds" @(Map.Map Int Id) (Map.insert n recId)) (showTypeRep' (NonRec t))
       return (show recId ++ " as (" ++ s ++ ")")
-
-setVisible :: (MonadIO m, Fail.MonadFail m) => TypeRep -> m ()
-setVisible t = do
-  rt <- liftIO $ UF.repr t
-  dtv <- liftIO $ UF.find' rt
-  case isVisible dtv of
-    True -> return ()
-    False -> do
-      liftIO $ UF.change rt (dtv {isVisible = True})
-      mapM_ setVisible (structure dtv)

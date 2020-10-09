@@ -46,6 +46,7 @@ import Util
 
 import HList as HL
 import Data.IORef
+import Data.List
 
 data AccessForm = IAccess Id | IFAccess Id Label | IFRAccess Id Label | IRAccess Id deriving (Eq, Ord, Show)
 
@@ -119,11 +120,11 @@ instance (ShowHF a_anTR, HFunctor a_anTR) => ShowHF (MatchChain a_anTR b_anTS) w
   showHF (MatchChainList x_aogN x_aogO)
     = (K $ (showConstr
               "MatchChainList")
-              [show x_aogN, show (second unK x_aogO)])
+              [show x_aogN, "(" ++ show (fst x_aogO) ++ ", " ++ unK (snd x_aogO) ++ ")"])
   showHF (MatchChainTree x_aogP x_aogQ)
     = (K $ (showConstr
               "MatchChainTree")
-              [show x_aogP, show $ VL.map (second unK) x_aogQ])
+              [show x_aogP, intercalate ", " . VL.toList $ VL.map (\(a, b) -> "(" ++ show a ++ ", " ++ unK b ++ ")") x_aogQ])
 
 instance (ShowHF a_anSL, HFunctor a_anSL) => ShowHF (RHSExpr a_anSL) where
   showHF (RHSExpr x_aogU)
@@ -135,6 +136,14 @@ matchChainToList ::
 matchChainToList mc = caseH (return . inj . hfmap (const (K ()))) (\case
     (MatchChainList a (p, xs) :&: ma) -> inj (MatchChainList a (p, K ()) :&: ma) : matchChainToList xs
   ) (unTerm mc)
+
+listToMatchChain :: forall e.
+  [TaggedMatchChainSig e SimplePatSig SimplePat (K ()) ListModel] ->
+  Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel
+listToMatchChain ls = foldr roll (error "empty chain") ls
+  where roll now acc = caseH 
+          (\(RHSExpr e :&: rhsId) -> iARHSExpr rhsId e :: Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel)
+          (\(MatchChainList a (p, _) :&: matchId) -> iAMatchChainList matchId a (p, acc)) now
 
 instance (ShowHF e, HFunctor e) => Show (TaggedMatchChainSig e SimplePatSig SimplePat (K ()) ListModel) where
   show m = caseH (\((RHSExpr rhs) :&: i) -> "RHSExpr " ++ (show rhs) ++ (show i)) (\case

@@ -71,7 +71,7 @@ unify m n = do
     db <- liftIO $ UF.find b
     dav <- liftIO $ readIORef da
     dbv <- liftIO $ readIORef db
-    k <- case (structure dav, structure dbv) of
+    case (structure dav, structure dbv) of
       (IdTypeRep (TIdRep {kind = ak}), IdTypeRep (TIdRep {kind = bk})) -> do
           if kindInstCond ak bk
           then liftIO $ UF.union a b >> return bk
@@ -90,7 +90,6 @@ unify m n = do
         then liftIO $ UF.union a b >> return bk
         else do
           row <- typeRep (RowRep Map.empty a)
-          when (isVisible dav) (setVisible row)
           unify row b
       (_, IdTypeRep (TIdRep {kind = k})) -> do
         ak <- unify a a
@@ -98,7 +97,6 @@ unify m n = do
         then liftIO $ UF.union b a >> return ak
         else do
           row <- typeRep (RowRep Map.empty b)
-          when (isVisible dbv) (setVisible row)
           unify row a
       (FunTypeRep arga reta, FunTypeRep argb retb) -> do
         liftIO $ UF.union a b
@@ -154,13 +152,11 @@ unify m n = do
                   newra <- extendRow resa (structure drav)
                   ra' <- typeRepFromDesc (drav {structure = newra})
                   rb' <- if Map.null resb then return rb' else typeRep (RowRep resb rb')
-                  when (isVisible dbv) (setVisible rb')
                   return (ra', rb')
                 (IdTypeRep _, RowRep _ _) -> do
                   newrb <- extendRow resb (structure drbv)
                   rb' <- typeRepFromDesc (drbv {structure = newrb})
                   ra' <- if Map.null resa then return ra' else typeRep (RowRep resa ra')
-                  when (isVisible dav) (setVisible ra')
                   return (ra', rb')
                 (IdTypeRep (TIdRep {kind = ak}), IdTypeRep (TIdRep {kind = bk})) -> do
                     extendKind (Map.keysSet resa) ak -- kind check
@@ -175,8 +171,6 @@ unify m n = do
                     if kindInstCond bk ubk then liftIO $ UF.union rb' ub else Fail.fail "kind check fails"
                     ra' <- if Map.null resa then return ra' else typeRep (RowRep resa ra')
                     rb' <- if Map.null resb then return rb' else typeRep (RowRep resb rb')
-                    when (isVisible dav) (setVisible ra')
-                    when (isVisible dbv) (setVisible rb')
                     return (ra', rb')
             rk <- unify ra'' rb''
             if Map.null commonLabels
@@ -188,5 +182,3 @@ unify m n = do
               Type -> Fail.fail "kind check fails"
               _ -> extendKind (Map.keysSet commonLabels) rk
       _ -> Fail.fail "cannot unify"
-    when (isVisible dav || isVisible dbv) (setVisible a)
-    return k
