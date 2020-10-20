@@ -29,10 +29,11 @@ import Parser
   refs:
   Basic: https://github.com/elevate-lang/elevate/blob/master/src/main/scala/elevate/core/strategies/basic.scala
   Traversal (RISE): https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/traversal.scala
-  TODO: The DepLambda cases in body are omitted here
   Traversal (ELEVATE): https://github.com/elevate-lang/elevate/blob/master/src/main/scala/elevate/core/strategies/traversal.scala
   Algorithmic: https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala
   Movement: https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/movement.scala
+  TODO: The DepLambda cases in body are omitted here
+  TODO: in isEqualTo what is == in mini-ELEVATE
 -}
 elevatePrograms :: String
 elevatePrograms = [r|
@@ -105,6 +106,22 @@ let allBottomup s p = (seq (all (allBottomup s)) s) p in
 let tryAll s p = (seq (all (tryAll (try s))) s) p in
 
 let addId = lam e = Success (App {Fun: Primitive Id | Arg: e}) in
+
+let normalize s = repeat (topDown s) in
+
+let not s e =
+    match (s e) with <
+    Success _ => Failure (not s)
+  | Failure _ => Success e
+  > in
+
+let isEqualTo x p =
+  match cond with <
+    True => Success p
+  | False => Failure (isEqualTo x)
+  > in
+
+let contains x p = topDown (isEqualTo x) p in
 
 let transposeMove =
   lam x = match x with <
