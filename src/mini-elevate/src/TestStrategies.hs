@@ -25,12 +25,17 @@ import AST
 import Parser
 
 {- 
- Basic 
- ref : https://github.com/elevate-lang/elevate/blob/master/src/main/scala/elevate/core/strategies/basic.scala
+  ELEVATE Programs in mini-ELEVATE
+  refs:
+  Basic: https://github.com/elevate-lang/elevate/blob/master/src/main/scala/elevate/core/strategies/basic.scala
+  Traversal (RISE): https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/traversal.scala
+  TODO: The DepLambda cases in body are omitted here
+  Traversal (ELEVATE): https://github.com/elevate-lang/elevate/blob/master/src/main/scala/elevate/core/strategies/traversal.scala
+  Algorithmic: https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala
+  Movement: https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/movement.scala
 -}
-
-basic :: String
-basic = [r| 
+elevatePrograms :: String
+elevatePrograms = [r|
 type RewriteResult = forall a b. <Success: a | Failure: b | *> in
 type Strategy = forall p q. p -> RewriteResult q Nat in
 
@@ -60,107 +65,68 @@ let lChoice fs ss =
 
 let try s = lChoice s id in
 
-let repeat s = try (seq s (repeat s)) in _
-|]
-
-{- 
-  Traversal (RISE)
-  ref : https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/traversal.scala
-  TODO : The DepLambda cases in body are omitted here
--}
-traversal1 :: String
-traversal1 = [r|
-  let mapSuccess rr f = 
-    match rr with <
-      Success a => Success (f a)
-    | Failure b => Failure b
-    > in
+let repeat s = try (seq s (repeat s)) in 
   
-  let body s e =
-    match e with <
-      Lam {Param: Nat | Body: App {Fun: f | Arg: Id {Name: Nat}} | Arg: x} =>
-      Success (mapSuccess (s f) (Lam {Param: _ | Body: _ | Arg: x}))
-    | _ => Failure s
-    > in
-
-  let function s e =
-    match e with <
-      App {Fun: f | Arg: x} =>
-      Success (mapSuccess (s f) (App {Fun: f | Arg: _}))
-    | _ => Failure s
-    > in
-
-  let argument s e =
-    match e with <
-      App {Fun: f | Arg: x} =>
-      Success (mapSuccess (s f) (App {Fun: f | Arg: _}))
-    | _ => Failure s
-    > in _
-|]
-
-{-
-  Traversal (ELEVATE)
-  ref: https://github.com/elevate-lang/elevate/blob/master/src/main/scala/elevate/core/strategies/traversal.scala
--}
-traversal2 :: String
-traversal2 = [r|
-  let topDown s p = (lChoice s (one (topDown s))) p in
+let mapSuccess rr f = 
+  match rr with <
+    Success a => Success (f a)
+  | Failure b => Failure b
+  > in
   
-  let bottomUp s p = (lChoice (one (bottomUp s)) s) p in
+let body s e =
+  match e with <
+    Lam {Param: Nat | Body: App {Fun: f | Arg: Id {Name: Nat}} | Arg: x} =>
+    Success (mapSuccess (s f) (Lam {Param: _ | Body: _ | Arg: x}))
+  | _ => Failure s
+  > in
 
-  let allTopdown s p = (seq s (all (allTopdown s))) p in
+let function s e =
+  match e with <
+    App {Fun: f | Arg: x} =>
+    Success (mapSuccess (s f) (App {Fun: f | Arg: _}))
+  | _ => Failure s
+  > in
 
-  let allBottomup s p = (seq (all (allBottomup s)) s) p in
+let argument s e =
+  match e with <
+    App {Fun: f | Arg: x} =>
+    Success (mapSuccess (s f) (App {Fun: f | Arg: _}))
+  | _ => Failure s
+  > in
+
+let topDown s p = (lChoice s (one (topDown s))) p in
   
-  let tryAll s p = (seq (all (tryAll (try s))) s) p in _
-|]
+let bottomUp s p = (lChoice (one (bottomUp s)) s) p in
 
+let allTopdown s p = (seq s (all (allTopdown s))) p in
 
-{- Algorithmic and movement -}
+let allBottomup s p = (seq (all (allBottomup s)) s) p in
+  
+let tryAll s p = (seq (all (tryAll (try s))) s) p in
 
--- Add id : https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L120
-addId :: String
-addId = [r|
-let addId = lam e = Success (App {Fun: Primitive Id | Arg: e}) in _
-|]
+let addId = lam e = Success (App {Fun: Primitive Id | Arg: e}) in
 
--- Transpose move : https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/movement.scala#L50
-transposeMove :: String
-transposeMove = [r|
 let transposeMove =
   lam x = match x with <
     App {Fun: App {Fun: Primitive Map | Arg: App {Fun: Primitive Map | Arg: f}} | Arg: App {Fun: Primitive Transpose | Arg: y}} =>
     Success (App {Fun: Primitive Transpose | Arg: App {Fun: App {Fun: Primitive Map | Arg: App {Fun: Primitive Map | Arg: f}} | Arg: y}})
   | _ => Failure 1
-  > in _
-|]
+  > in
 
--- Id to transpose : https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L132
--- app ((\x -> transpose (transpose x)), arg)
-idToTranspose :: String
-idToTranspose = [r|
 let idToTranspose =
   lam x = match x with <
     App {Fun: Primitive Id | Arg: arg} =>
     Success (App {Fun: Lam {Param: 0 | Body: App {Fun: Primitive Transpose | Arg: App {Fun: Primitive Transpose | Arg: Id {Name: 0}}}} | Arg: arg})
   | _ => Failure 1
-  > in _
-|]
+  > in
 
--- Split join : https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L29
-splitJoin :: String
-splitJoin = [r|
 let splitJoin = 
   lam x = match x with <
     App {Fun: Primitive Map | Arg: f} => 
     Success (App {Fun: Primitive Join | Arg: App {Fun: App {Fun: Primitive Map | Arg: App {Fun: Primitive Map | Arg: f}} | Arg: Primitive (Split n)}})
   | _ => Failure 1
-  > in _
-|]
+  > in
 
--- Map fusion : https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L41
-mapFusion :: String
-mapFusion = [r|
 let mapFusion = 
   lam x = match x with <
     App {Fun: App {Fun: Primitive Map | Arg: f} | Arg: App {Fun: App {Fun: Primitive Map | Arg: g} | Arg: x}} => 
