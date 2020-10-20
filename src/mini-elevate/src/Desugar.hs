@@ -18,6 +18,50 @@ import Data.Comp.Multi.HFoldable
 import Data.Comp.Multi.HTraversable
 import Data.Comp.Multi.HFunctor
 import Data.Comp.Multi.Derive
+import qualified Label as L
+
+class TypeDefSubst f g m where
+  typeDefSubstAlg :: Alg f (Compose m (Fix g))
+
+$(derive [liftSum] [''TypeDefSubst])
+
+instance {-# OVERLAPPABLE #-} (Monad m, HTraversable f, f :<: g) => TypeDefSubst f g m where
+  typeDefSubstAlg = Compose . fmap inject . hmapM getCompose
+
+instance {-# OVERLAPPABLE #-} (Monad m) => TypeDefSubst (TypeDef TypeSig) g m where
+  typeDefSubstAlg (TypeDef _ _ e) = e
+
+class LabelFun f g m where
+  labelFunAlg :: Alg f (Compose m (Fix g))
+
+$(derive [liftSum] [''LabelFun])
+
+instance {-# OVERLAPPABLE #-} (MonadState (Maybe L.Label) m, HTraversable f, f :<: g) => LabelFun f g m where
+  labelFunAlg f = Compose $ do
+    g <- fmap inject (hmapM getCompose f)
+    put Nothing
+    return g
+
+instance {-# OVERLAPPABLE #-} (MonadState (Maybe L.Label) m, 
+  LabelExpr LabelAsFun :<: g, RecordOps :<: g) => LabelFun (LabelExpr LabelAsLit) g m where
+  labelFunAlg (LabelLit l) = Compose $ do
+    put (Just l)
+    return (iLabelApp l (iRecordCons []))
+
+instance {-# OVERLAPPABLE #-} (MonadState (Maybe L.Label) m, 
+  LabelExpr LabelAsFun :<: g, Expr :<: g) => LabelFun Expr g m where
+  labelFunAlg (AppExpr fun arg) = Compose $ do
+    fun' <- getCompose fun
+    isLabel <- get
+    arg' <- getCompose arg
+    put Nothing
+    case isLabel of
+      Just l -> return (iLabelApp l arg')
+      Nothing -> return (iAppExpr fun' arg')
+  labelFunAlg e = Compose $ do
+    e' <- fmap inject (hmapM getCompose e)
+    put Nothing
+    return e'
 
 class GenRecDef f g m where
   genRecDefAlg :: Alg f (Compose m (Fix g))
@@ -46,7 +90,7 @@ instance {-# OVERLAPPABLE #-} (MonadState (Set.Set Id) m, FunDef p t :<: g, RecD
     return $ case isUsed of
       True -> iRecDef i c t f' e'
       False -> iFunDef i c t f' e'
-
+{-
 genRecDef :: Fix ExprSig EXPR -> Fix FullSig EXPR
 genRecDef = flip evalState (Set.empty) . getCompose . cata genRecDefAlg
 
@@ -59,3 +103,4 @@ let g x = g 1 in g 2
 testGenRecDef = case testRun program recExample of
   Right p -> genRecDef p
   Left _ -> error "Parsing Error"
+-}

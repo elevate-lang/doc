@@ -20,7 +20,7 @@ import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
 import Control.Monad
 import Control.Monad.Reader
-import Control.Monad.State
+import Control.Monad.State as MS
 import Control.Monad.Writer
 import Control.Arrow
 import AST
@@ -50,6 +50,8 @@ import Data.IORef
 import Data.List
 import Data.Foldable
 
+type Subst e = Map.Map Id e
+
 data AccessForm = IAccess Id | IFAccess Id Label | IFRAccess Id Label | IRAccess Id deriving (Eq, Ord, Show)
 
 toRAccess :: AccessForm -> AccessForm
@@ -57,58 +59,74 @@ toRAccess (IAccess i) = IRAccess i
 toRAccess (IFAccess i l) = IFRAccess i l
 toRAccess a = a
 
-accessId :: AccessForm -> Id
-accessId (IAccess i) = i
-accessId (IFAccess i _) = i
-accessId (IFRAccess i _) = i
-accessId (IRAccess i) = i
-
-accessMerge :: AccessForm -> AccessForm -> Maybe AccessForm
-accessMerge = undefined
-
 accessToAST :: (Expr :<: e, RecordOps :<: e) => AccessForm -> Fix e EXPR
 accessToAST (IAccess i) = iIdExpr i
 accessToAST (IFAccess i l) = iFieldAccess (iIdExpr i) l
 accessToAST (IFRAccess i l) = iRecordMod (iFieldAccess (iIdExpr i) l) []
 accessToAST (IRAccess i) = iRecordMod (iIdExpr i) []
 
+accessId :: AccessForm -> Id
+accessId (IAccess i) = i
+accessId (IFAccess i _) = i
+accessId (IFRAccess i _) = i
+accessId (IRAccess i) = i
+
+accessSubst :: Subst Id -> AccessForm -> AccessForm
+accessSubst s (IAccess i) = IAccess (Map.findWithDefault i i s)
+accessSubst s (IFAccess i f) = IFAccess (Map.findWithDefault i i s) f
+accessSubst s (IFRAccess i f) = IFRAccess (Map.findWithDefault i i s) f
+accessSubst s (IRAccess i) = IRAccess (Map.findWithDefault i i s)
+
+accessMerge :: (Fail.MonadFail m) => AccessForm -> AccessForm -> m AccessForm
+accessMerge (IAccess ia) (IAccess ib) = 
+  if ia == ib then return (IAccess ia) else Fail.fail "cannot merge"
+accessMerge (IFAccess ia fa) (IFAccess ib fb) = 
+  if (ia == ib) && (fa == fb) then return (IFAccess ia fa) else Fail.fail "cannot merge"
+accessMerge (IFRAccess ia fa) (IFRAccess ib fb) = 
+  if (ia == ib) && (fa == fb) then return (IFRAccess ia fa) else Fail.fail "cannot merge"
+accessMerge (IRAccess ia) (IRAccess ib) =
+  if ia == ib then return (IRAccess ia) else Fail.fail "cannot merge"
+accessMerge (IRAccess ia) (IAccess ib) =
+  if ia == ib then return (IRAccess ia) else Fail.fail "cannot merge"
+accessMerge (IAccess ia) (IRAccess ib) =
+  if ia == ib then return (IRAccess ia) else Fail.fail "cannot merge"
+accessMerge (IFRAccess ia fa) (IFAccess ib fb) = 
+  if (ia == ib) && (fa == fb) then return (IFRAccess ia fa) else Fail.fail "cannot merge"
+accessMerge (IFAccess ia fa) (IFRAccess ib fb) = 
+  if (ia == ib) && (fa == fb) then return (IFRAccess ia fa) else Fail.fail "cannot merge"
+accessMerge _ _ = Fail.fail "cannot merge"
+
 type MatchId = [Int]
 
-type RHSId = MatchId
-
--- type ComplexPatSig = Pat :+: AppPat :+: RecordPat :+: MatchAllPat
 type ComplexPatSig = RecordPat :+: AppPat :+: Pat :+: MatchAllPat
 
-type ComplexMatch = Match ComplexPatSig ComplexPat
-
 type SimplePatSig = Pat :+: AppPat
-
-type SimpleMatch = Match SimplePatSig SimplePat
 
 data ListModel
 
 data TreeModel
 
-data RHSExpr :: ((* -> *) -> * -> *) -> (* -> *) -> * -> * where
-  RHSExpr :: Fix e EXPR -> RHSExpr e self m
-
-data MatchChain :: ((* -> *) -> * -> *) -> * -> (* -> *) -> * -> * where
+data MatchChain :: ((* -> *) -> * -> *) -> ((* -> *) -> * -> *) -> * -> (* -> *) -> * -> * where
+  RHSExpr :: Fix e EXPR -> MatchChain e p l self m
   MatchChainList :: AccessForm -> 
-    (Fix p l, self ListModel) -> MatchChain p l self ListModel
+    (Fix p l, self ListModel) -> MatchChain e p l self ListModel
   MatchChainTree :: AccessForm -> 
-    VL.Vec (S n) (Fix p l, self TreeModel) -> MatchChain p l self TreeModel
+    [(Fix p l, self TreeModel)] -> MatchChain e p l self TreeModel
 
-type MatchChainSig e p l = RHSExpr e :+: MatchChain p l
+$(derive [makeHFunctor, makeHFoldable, makeHTraversable][''MatchChain])
+
+iRHSExpr e = Term $ RHSExpr e
+
+iARHSExpr l e = Term $ RHSExpr e :&: l
+iMatchChainList a mcs = Term $ MatchChainList a mcs
+
+iAMatchChainList l a mcs = Term $ MatchChainList a mcs :&: l
+
+iMatchChainTree a bs = Term $ MatchChainTree a bs
+
+iAMatchChainTree l a bs = Term $ MatchChainTree a bs :&: l
 
 data PatProp = NonVar | Var deriving (Show, Eq, Ord)
-
-type TaggedMatchChainSig e p l = (RHSExpr e :&: RHSId) :+: (MatchChain p l :&: MatchId)
-
-type JudgedMatchChain e = [(PatProp, TaggedMatchChainSig e SimplePatSig SimplePat (K ()) ListModel)]
-
-$(derive [makeHFunctor, makeHFoldable, makeHTraversable][''MatchChain, ''RHSExpr])
-
-$(derive [smartConstructors, smartAConstructors][''MatchChain, ''RHSExpr])
 
 instance Semigroup PatProp where
   Var <> Var = Var
@@ -118,41 +136,37 @@ instance Semigroup PatProp where
 instance Monoid PatProp where
   mempty = Var
 
-instance (ShowHF a_anTR, HFunctor a_anTR) => ShowHF (MatchChain a_anTR b_anTS) where
-  showHF (MatchChainList x_aogN x_aogO)
-    = (K $ (showConstr
-              "MatchChainList")
-              [show x_aogN, "(" ++ show (fst x_aogO) ++ ", " ++ unK (snd x_aogO) ++ ")"])
-  showHF (MatchChainTree x_aogP x_aogQ)
-    = (K $ (showConstr
-              "MatchChainTree")
-              [show x_aogP, intercalate ", " . VL.toList $ VL.map (\(a, b) -> "(" ++ show a ++ ", " ++ unK b ++ ")") x_aogQ])
+type TaggedMatchChainSig e p l = MatchChain e p l :&: MatchId
 
-instance (ShowHF a_anSL, HFunctor a_anSL) => ShowHF (RHSExpr a_anSL) where
-  showHF (RHSExpr x_aogU)
-    = (K $ (showConstr "RHSExpr") [show x_aogU])
+type JudgedMatchChain e = [(PatProp, TaggedMatchChainSig e SimplePatSig SimplePat (K ()) ListModel)]
+
+class LinearPat f m where
+  pvAlg :: AlgM m f (K (Set.Set Id))
+  
+$(derive [liftSum] [''LinearPat])
 
 matchChainToList :: 
   Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel ->
   [TaggedMatchChainSig e SimplePatSig SimplePat (K ()) ListModel]
-matchChainToList mc = caseH (return . inj . hfmap (const (K ()))) (\case
-    (MatchChainList a (p, xs) :&: ma) -> inj (MatchChainList a (p, K ()) :&: ma) : matchChainToList xs
-  ) (unTerm mc)
+matchChainToList mc = case unTerm mc of
+  MatchChainList a (p, xs) :&: ma -> (MatchChainList a (p, K ()) :&: ma) : matchChainToList xs
+  RHSExpr rhs :&: ma -> [RHSExpr rhs :&: ma]
 
 listToMatchChain :: forall e.
   [TaggedMatchChainSig e SimplePatSig SimplePat (K ()) ListModel] ->
   Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel
 listToMatchChain ls = foldr roll (error "empty chain") ls
-  where roll now acc = caseH
-          (\(RHSExpr e :&: rhsId) -> iARHSExpr rhsId e :: Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel)
-          (\(MatchChainList a (p, _) :&: matchId) -> iAMatchChainList matchId a (p, acc)) now
+  where roll now acc = case now of
+          RHSExpr e :&: rhsId -> iARHSExpr rhsId e :: Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel
+          MatchChainList a (p, _) :&: matchId -> iAMatchChainList matchId a (p, acc)
 
 instance (ShowHF e, HFunctor e) => Show (TaggedMatchChainSig e SimplePatSig SimplePat (K ()) ListModel) where
-  show m = caseH (\((RHSExpr rhs) :&: i) -> "RHSExpr " ++ (show rhs) ++ (show i)) (\case
-    ((MatchChainList a (p, K ())) :&: i) -> "MatchChainList " ++ (show a) ++ " " ++ (show p) ++ (show i)) m
+  show m = case m of
+    RHSExpr rhs :&: i -> "RHSExpr " ++ (show rhs) ++ (show i)
+    MatchChainList a (p, K ()) :&: i -> "MatchChainList " ++ (show a) ++ " " ++ (show p) ++ (show i)
 
-patExpansion :: forall ts e m. (Occurs ("NameCounter" :- IORef Int) ts HList,
-  Update ("RHSId" :- RHSId) ts HList,
+patExpansion :: forall e ts m. (Occurs ("NameCounter" :- IORef Int) ts HList,
+  Update ("RHSId" :- MatchId) ts HList,
   Update ("MatchId" :- MatchId) ts HList,
   Update ("LabelSet" :- Set.Set Label) ts HList,
   Update ("Var" :- Id) ts HList,
@@ -208,8 +222,8 @@ patExpansion delta p = do
           ),
           byDefault $ local updateCxt (patExpansion (IAccess freshId) p)]
         tell NonVar
-        return $ (NonVar, inj (MatchChainList delta (
-          iAppIdPat label freshId :: Fix SimplePatSig SimplePat, K ()) :&: l)) : chain
+        return $ (NonVar, MatchChainList delta (
+          iAppIdPat label freshId :: Fix SimplePatSig SimplePat, K ()) :&: l) : chain
     ),
     patCase @RecordPat (\case
       RecordPat ps -> case ps of
@@ -247,8 +261,8 @@ patExpansion delta p = do
                     HL.modify @"LabelSet" @(Set.Set Label) (const Set.empty) .
                     HL.modify @"Var" @(Id) (const freshId)
               (chain, prop) <- listen (local updateCxt (patExpansion (IAccess freshId) (iRecordPat ps)))
-              return $ (prop, inj (MatchChainList (toRAccess delta) (
-                iIdPat freshId :: Fix SimplePatSig SimplePat, K ()) :&: l)) : chain
+              return $ (prop, MatchChainList (toRAccess delta) (
+                iIdPat freshId :: Fix SimplePatSig SimplePat, K ()) :&: l) : chain
     )]
   where
     patCase :: forall f y. (f :<: ComplexPatSig) => 
@@ -257,21 +271,66 @@ patExpansion delta p = do
 
 matchChainReversing :: (t ~ [TaggedMatchChainSig e SimplePatSig SimplePat (K ()) ListModel]) => (t, t) -> t
 matchChainReversing ([], chainAccum) = chainAccum
-matchChainReversing ((c : chain), chainAccum) = caseH 
-  (\((RHSExpr rhs) :&: i) -> chainAccum) 
-  (\((MatchChainList a (p, K ())) :&: i) -> matchChainReversing (chain, (c : chainAccum))) c
+matchChainReversing ((c : chain), chainAccum) = case c of
+  RHSExpr rhs :&: i -> chainAccum
+  MatchChainList a (p, K ()) :&: i -> matchChainReversing (chain, (c : chainAccum))
 
 matchChainGrouping :: (t ~ [TaggedMatchChainSig e SimplePatSig SimplePat (K ()) ListModel]) =>
   (JudgedMatchChain e, t) -> t
 matchChainGrouping (tchain, chain) = case tchain of 
   [] -> (error "empty chainT")
   (prop, c) : xs -> case prop of
-    Var -> caseH (\case
-      ((RHSExpr rhs) :&: i) -> matchChainReversing (chain, [c])) (\case
-      ((MatchChainList a (p, K ())) :&: i) -> matchChainGrouping (xs, (c : chain))) c
+    Var -> case c of
+      RHSExpr rhs :&: i -> matchChainReversing (chain, [c])
+      MatchChainList a (p, K ()) :&: i -> matchChainGrouping (xs, (c : chain))
     NonVar -> c : (matchChainGrouping (xs, chain))
 
-type Subst e l = Map.Map Id (Fix e l)
+class SubstPat f g m where
+  substpvAlg :: Alg f (Compose m (Fix g))
+
+$(derive [liftSum] [''SubstPat])
+
+instance (Occurs ("SubstPV" :- Subst Id) ts HList,
+  MonadReader (HList ts) m, Pat :<: g) => SubstPat Pat g m where
+  substpvAlg (IdPat i) = Compose $ do
+    subst <- select @"SubstPV" @(Subst Id) <$> ask
+    case Map.lookup i subst of
+      Just i' -> return $ iIdPat i'
+      Nothing -> return $ iIdPat i
+  substpvAlg (LabelPat l) = Compose . return $ iLabelPat l
+
+instance (Occurs ("SubstPV" :- Subst Id) ts HList,
+  MonadReader (HList ts) m, AppPat :<: g) => SubstPat AppPat g m where
+  substpvAlg (AppPat l p) = Compose $ iAppPat l <$> getCompose p
+  substpvAlg (AppIdPat l i) = Compose $ do
+    subst <- select @"SubstPV" @(Subst Id) <$> ask
+    case Map.lookup i subst of
+      Just i' -> return $ iAppIdPat l i'
+      Nothing -> return $ iAppIdPat l i
+
+instance (Monad m, RecordPat :<: g) => SubstPat RecordPat g m where
+  substpvAlg (RecordPat ps) = Compose $ iRecordPat <$> mapM (\(l, Compose p) -> (l,) <$> p) ps
+
+instance (Monad m, MatchAllPat :<: g) => SubstPat MatchAllPat g m where
+  substpvAlg MatchAllPat = Compose $ return iMatchAllPat
+
+instance (Fail.MonadFail m) => LinearPat Pat m where
+  pvAlg (IdPat i) = return (K (Set.singleton i))
+  pvAlg (LabelPat _) = return (K Set.empty)
+
+instance (Fail.MonadFail m) => LinearPat AppPat m where
+  pvAlg (AppPat _ p) = return p
+  pvAlg (AppIdPat _ i) = return (K (Set.singleton i))
+
+instance (Fail.MonadFail m) => LinearPat RecordPat m where
+  pvAlg (RecordPat ps) = K <$> foldM process Set.empty ps
+    where process acc (_, now) = let pv = unK now in 
+            if not (Set.null (Set.intersection acc pv))
+            then Fail.fail "nonlinear pattern"
+            else return (Set.union acc pv)
+            
+instance (Fail.MonadFail m) => LinearPat MatchAllPat m where
+  pvAlg MatchAllPat = return (K Set.empty)
 
 class Substitutable f g m where
   substAlg :: Alg f (Compose m (Fix g))
@@ -288,12 +347,12 @@ instance ContainFV Expr where
   fvAlg (AppExpr fun arg) = K $ Set.union (unK fun) (unK arg)
   fvAlg (LamExpr param body) = K $ Set.delete param (unK body)
 
-instance (Update ("Subst" :- Subst g EXPR) ts HList,
+instance (Update ("Subst" :- Subst (Fix g EXPR)) ts HList,
   MonadIO m, Occurs ("NameCounter" :- IORef Int) ts HList,
   MonadReader (HList ts) m, 
   HFunctor g, Expr :<: g, ContainFV g) => Substitutable Expr g m where
   substAlg (IdExpr x) = Compose $ do
-    subst <- select @"Subst" @(Subst g EXPR) <$> ask
+    subst <- select @"Subst" @(Subst (Fix g EXPR)) <$> ask
     case Map.lookup x subst of
       Nothing -> return $ iIdExpr x
       Just e -> return e
@@ -302,91 +361,395 @@ instance (Update ("Subst" :- Subst g EXPR) ts HList,
     arg' <- getCompose arg
     return $ iAppExpr fun' arg'
   substAlg (LamExpr param body) = Compose $ do
-    subst <- select @"Subst" @(Subst g EXPR) <$> ask
+    subst <- select @"Subst" @(Subst (Fix g EXPR)) <$> ask
     let fv = fold (Map.map (unK . cata fvAlg) subst)
     if Set.member param fv then do
       freshId <- genFreshId "#x"
       let updateCxt = Map.insert param (iIdExpr freshId)
-      body' <- local (HL.modify @"Subst" @(Subst g EXPR) updateCxt) (getCompose body)
+      body' <- local (HL.modify @"Subst" @(Subst (Fix g EXPR)) updateCxt) (getCompose body)
       return $ iLamExpr freshId body'
     else do
       let updateCxt = Map.delete param
-      body' <- local (HL.modify @"Subst" @(Subst g EXPR) updateCxt) (getCompose body)
+      body' <- local (HL.modify @"Subst" @(Subst (Fix g EXPR)) updateCxt) (getCompose body)
       return $ iLamExpr param body'
-{-
-instance (Update ("Subst" :- Subst g EXPR) ts HList,
+
+instance ContainFV (FunDef p t) where
+  fvAlg (FunDef name _ _ f e) = K $ Set.union (unK f) (Set.delete name (unK e))
+
+instance (Update ("Subst" :- Subst (Fix g EXPR)) ts HList,
   MonadIO m, Occurs ("NameCounter" :- IORef Int) ts HList,
   MonadReader (HList ts) m, 
-  HFunctor g, (FunDef p t) :<: g, ContainFV g) => Substitutable (FunDef p t) g m where
+  HFunctor g, (FunDef p t) :<: g, Expr :<: g, ContainFV g) => Substitutable (FunDef p t) g m where
   substAlg (FunDef name c t f e) = Compose $ do
-    subst <- select @"Subst" @(Subst g EXPR) <$> ask
+    subst <- select @"Subst" @(Subst (Fix g EXPR)) <$> ask
     let fv = fold (Map.map (unK . cata fvAlg) subst)
     if Set.member name fv then do
       freshId <- genFreshId "#x"
-      let updateCxt = Map.insert param (iIdExpr freshId)
-      body' <- local (HL.modify @"Subst" @(Subst g EXPR) updateCxt) (getCompose body)
-      return $ iLamExpr freshId body'
+      let updateCxt = Map.insert name (iIdExpr freshId)
+      f' <- getCompose f
+      e' <- local (HL.modify @"Subst" @(Subst (Fix g EXPR)) updateCxt) (getCompose e)
+      return $ iFunDef freshId c t f' e'
     else do
-      let updateCxt = Map.delete param
-      body' <- local (HL.modify @"Subst" @(Subst g EXPR) updateCxt) (getCompose body)
-      return $ iLamExpr param body'
--}
-{- TESTING -}
-astToAccess :: Fix ExprSig EXPR -> AccessForm
-astToAccess expr = runCase [
-  exprCase @Expr expr (\case
-    IdExpr i -> IAccess i
-    _ -> error "Unexpected expression"
-  ),
-  exprCase @RecordOps expr (\case
-    FieldAccess e l -> runCase [
-      exprCase @Expr e (\case
-        IdExpr i -> IFAccess i l
-        _ -> error "Unexpected expression"
-      )]
-    RecordMod e xs -> runCase [
-      exprCase @Expr e (\case
-        IdExpr i -> IRAccess i
-        _ -> error "Unexpected expression"
-      ),
-      exprCase @RecordOps e (\case
-        FieldAccess e1 l1 -> runCase [
-          exprCase @Expr e1 (\case
-            IdExpr i -> IFRAccess i l1
-            _ -> error "Unexpected expression"
-          )]
-        _ -> error "Unexpected expression"
-      )]
-  )]
+      let updateCxt = Map.delete name
+      f' <- getCompose f
+      e' <- local (HL.modify @"Subst" @(Subst (Fix g EXPR)) updateCxt) (getCompose e)
+      return $ iFunDef name c t f' e'
+
+instance ContainFV (RecDef p t) where
+  fvAlg (RecDef name _ _ f e) = K $ Set.delete name (Set.union (unK f) (unK e))
+
+instance (Update ("Subst" :- Subst (Fix g EXPR)) ts HList,
+  MonadIO m, Occurs ("NameCounter" :- IORef Int) ts HList,
+  MonadReader (HList ts) m, 
+  HFunctor g, (RecDef p t) :<: g, Expr :<: g, ContainFV g) => Substitutable (RecDef p t) g m where
+  substAlg (RecDef name c t f e) = Compose $ do
+    subst <- select @"Subst" @(Subst (Fix g EXPR)) <$> ask
+    let fv = fold (Map.map (unK . cata fvAlg) subst)
+    if Set.member name fv then do
+      freshId <- genFreshId "#x"
+      let updateCxt = Map.insert name (iIdExpr freshId)
+      f' <- local (HL.modify @"Subst" @(Subst (Fix g EXPR)) updateCxt) (getCompose f)
+      e' <- local (HL.modify @"Subst" @(Subst (Fix g EXPR)) updateCxt) (getCompose e)
+      return $ iRecDef freshId c t f' e'
+    else do
+      let updateCxt = Map.delete name
+      f' <- local (HL.modify @"Subst" @(Subst (Fix g EXPR)) updateCxt) (getCompose f)
+      e' <- local (HL.modify @"Subst" @(Subst (Fix g EXPR)) updateCxt) (getCompose e)
+      return $ iRecDef name c t f' e'
+
+instance ContainFV RecordOps where
+  fvAlg (RecordCons r) = K $ Set.unions (map (unK . snd) r)
+  fvAlg (FieldAccess r _) = r
+  fvAlg (FieldRemove r _) = r
+  fvAlg (RecordMod r m) = K $ Set.union (unK r) (Set.unions (map (unK . snd) m))
+  fvAlg (RecordExt r m) = K $ Set.union (unK r) (Set.unions (map (unK . snd) m))
+
+instance (Monad m, HFunctor g, RecordOps :<: g) => Substitutable RecordOps g m where
+  substAlg (RecordCons r) = Compose $ do
+    r' <- mapM (\(l, e) -> (l,) <$> getCompose e) r
+    return $ iRecordCons r'
+  substAlg (FieldAccess r l) = Compose $ do
+    r' <- getCompose r
+    return $ iFieldAccess r' l
+  substAlg (FieldRemove r l) = Compose $ do
+    r' <- getCompose r
+    return $ iFieldRemove r' l
+  substAlg (RecordMod r m) = Compose $ do
+    r' <- getCompose r
+    m' <- mapM (\(l, e) -> (l,) <$> getCompose e) m
+    return $ iRecordMod r' m'
+  substAlg (RecordExt r m) = Compose $ do
+    r' <- getCompose r
+    m' <- mapM (\(l, e) -> (l,) <$> getCompose e) m
+    return $ iRecordExt r' m'
+
+instance ContainFV (LabelExpr LabelAsFun) where
+  fvAlg (LabelApp _ e) = e
+
+instance (Monad m, HFunctor g, (LabelExpr LabelAsFun) :<: g) => Substitutable (LabelExpr LabelAsFun) g m where
+  substAlg (LabelApp l e) = Compose $ iLabelApp l <$> getCompose e
+
+instance (HTraversable p, LinearPat p Maybe) => ContainFV (Match p l) where
+  fvAlg (Match e cases) = K $ Set.union (unK e) (foldl process Set.empty cases)
+    where process acc (p, rhs)= case cataM pvAlg p of
+            Just pv -> Set.union acc (Set.difference (unK rhs) (unK pv))
+            Nothing -> error "impossible"
+
+instance (Update ("Subst" :- Subst (Fix g EXPR)) ts HList,
+  MonadIO m, Occurs ("NameCounter" :- IORef Int) ts HList,
+  MonadReader (HList ts) m, Fail.MonadFail m,
+  HTraversable p, LinearPat p m,
+  SubstPat p p (Reader (HList '["SubstPV" :- Subst Id])),
+  HFunctor g, (Match p l) :<: g, Expr :<: g, ContainFV g) => 
+  Substitutable (Match p l) g m where
+  substAlg (Match e cases) = Compose $ do
+    e' <- getCompose e
+    subst <- select @"Subst" @(Subst (Fix g EXPR)) <$> ask
+    let fv = fold (Map.map (unK . cata fvAlg) subst)
+    let process (p, rhs) = do
+          (K pv) <- cataM pvAlg p
+          let common = Set.intersection pv fv
+          if not (Set.null common) then do
+            freshIdSubst <- sequence (Map.fromSet (const (genFreshId "#x")) common)
+            let updateCxt = Map.union (Map.map iIdExpr freshIdSubst)
+            rhs' <- local (HL.modify @"Subst" @(Subst (Fix g EXPR)) updateCxt) (getCompose rhs)
+            let cxtPV :: HList '["SubstPV" :- Subst Id]
+                cxtPV = Field freshIdSubst :| HNil
+                p' = flip runReader cxtPV . getCompose $ cata substpvAlg p
+            return (p', rhs')
+          else do
+            let updateCxt cxt = foldl (\acc now -> Map.delete now acc) cxt pv
+            rhs' <- local (HL.modify @"Subst" @(Subst (Fix g EXPR)) updateCxt) (getCompose rhs)
+            return (p, rhs')
+    cases' <- mapM process cases
+    return $ iMatch e' cases'
+
+instance ContainFV (RHS i) where
+  fvAlg (RHS _ e) = e
+
+instance (Monad m, HFunctor g, RHS i :<: g) => Substitutable (RHS i) g m where
+  substAlg (RHS i e) = Compose $ iRHS i <$> getCompose e
+
+instance (HTraversable e, ContainFV e) => ContainFV (TaggedMatchChainSig e SimplePatSig SimplePat) where
+  fvAlg (MatchChainList a (p, c) :&: _) = K $ case cataM pvAlg p of
+            Just pv -> Set.insert (accessId a) (Set.difference (unK c) (unK pv))
+            Nothing -> error "impossible"
+  fvAlg (MatchChainTree a bs :&: _) = K $ Set.insert (accessId a) (fold (map process bs))
+    where process (p, b) = case cataM pvAlg p of
+            Just pv -> Set.difference (unK b) (unK pv)
+            Nothing -> error "impossible"
+  fvAlg (RHSExpr e :&: _) = K $ unK (cata fvAlg e)
+
+instance (Update ("Subst" :- Subst (Fix e EXPR)) ts HList,
+  MonadIO m, Occurs ("NameCounter" :- IORef Int) ts HList,
+  MonadReader (HList ts) m, Fail.MonadFail m, HTraversable e, Substitutable e e m,
+  (TaggedMatchChainSig e SimplePatSig SimplePat) ~ g, Expr :<: e, ContainFV e) => 
+  Substitutable (TaggedMatchChainSig e SimplePatSig SimplePat) g m where
+  substAlg (MatchChainList a (p, c) :&: mcid) = Compose $ do
+    subst <- select @"Subst" @(Subst (Fix e EXPR)) <$> ask
+    let ia = accessId a
+    a' <- case Map.lookup ia subst of
+      Just s -> case project s :: Maybe (Expr (Fix e) EXPR) of
+        Just (IdExpr i) -> return (accessSubst (Map.singleton ia i) a)
+        _ -> Fail.fail "impossible"
+      Nothing -> return a
+    let fv = fold (Map.map (unK . cata fvAlg) subst)
+    (K pv) <- cataM pvAlg p
+    case Set.size pv of
+      0 -> do
+        c' <- getCompose c
+        return $ iAMatchChainList mcid a' (p, c')
+      1 -> do
+        let v = head (Set.toList pv)
+        if Set.member v fv then do
+          freshId <- genFreshId "#x"
+          let updateCxt = Map.insert v (iIdExpr freshId)
+          c' <- local (HL.modify @"Subst" @(Subst (Fix e EXPR)) updateCxt) (getCompose c)
+          let cxtPV :: HList '["SubstPV" :- Subst Id]
+              cxtPV = Field (Map.singleton v freshId) :| HNil
+              p' :: Fix SimplePatSig SimplePat
+              p' = flip runReader cxtPV . getCompose $ cata substpvAlg p
+          return $ iAMatchChainList mcid a' (p', c')
+        else do
+          let updateCxt = Map.delete v
+          c' <- local (HL.modify @"Subst" @(Subst (Fix e EXPR)) updateCxt) (getCompose c)
+          return $ iAMatchChainList mcid a' (p, c')
+      _ -> Fail.fail "impossible"
+  substAlg (MatchChainTree a bs :&: mtid) = Compose $ do
+    subst <- select @"Subst" @(Subst (Fix e EXPR)) <$> ask
+    let ia = accessId a
+    a' <- case Map.lookup ia subst of
+      Just s -> case project s :: Maybe (Expr (Fix e) EXPR) of
+        Just (IdExpr i) -> return (accessSubst (Map.singleton ia i) a)
+        _ -> Fail.fail "impossible"
+      Nothing -> return a
+    let fv = fold (Map.map (unK . cata fvAlg) subst)
+    let process (p, b) = do
+          (K pv) <- cataM pvAlg p
+          case Set.size pv of
+            0 -> do
+              b' <- getCompose b
+              return $ (p, b')
+            1 -> do
+              let v = head (Set.toList pv)
+              if Set.member v fv then do
+                freshId <- genFreshId "#x"
+                let updateCxt = Map.insert v (iIdExpr freshId)
+                b' <- local (HL.modify @"Subst" @(Subst (Fix e EXPR)) updateCxt) (getCompose b)
+                let cxtPV :: HList '["SubstPV" :- Subst Id]
+                    cxtPV = Field (Map.singleton v freshId) :| HNil
+                    p' :: Fix SimplePatSig SimplePat
+                    p' = flip runReader cxtPV . getCompose $ cata substpvAlg p
+                return (p', b')
+              else do
+                let updateCxt = Map.delete v
+                b' <- local (HL.modify @"Subst" @(Subst (Fix e EXPR)) updateCxt) (getCompose b)
+                return (p, b')
+            _ -> Fail.fail "impossible"
+    bs' <- mapM process bs
+    return $ iAMatchChainTree mtid a' bs'
+  substAlg (RHSExpr e :&: rhsid) = Compose $ do
+    e' <- getCompose (cata substAlg e) :: m (Fix e EXPR)
+    return $ iARHSExpr rhsid e'
+
+selectCandidate :: (t ~ Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel) =>
+  AccessForm -> MatchId -> t -> t
+selectCandidate a m mc = head $ selectRun a m mc id []
   where
-    exprCase :: forall f y. (f :<: ExprSig) => 
-      Fix ExprSig EXPR -> (f (Fix ExprSig) EXPR -> y) -> Maybe y
-    exprCase = lCase
+    selectRun :: (t ~ Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel) =>
+      AccessForm -> MatchId -> t -> (t -> t) -> [t] -> [t]
+    selectRun a m mc f c = case (unTerm mc) of
+      MatchChainList a' (p, mc') :&: m' | let cons = (\mc -> iAMatchChainList m' a' (p, mc)) ->
+        if length m == length m' then case accessMerge a a' of
+          Just _ -> [(cons . f) mc']
+          Nothing -> selectRun a m mc' (f . cons) (c ++ [(cons . f) mc'])
+        else
+          selectRun a m mc' (f . cons) c
+      RHSExpr e :&: m' -> c ++ [f (iARHSExpr m' e)]
 
-executePatternExpansion :: (MonadIO m, Fail.MonadFail m) => 
-  Fix ExprSig EXPR -> Int -> m ([JudgedMatchChain ExprSig])
-executePatternExpansion expr n = runCase [
-  exprCase @(Match PatSig ComplexPat) expr (\case
-    Match exp list -> case list of
-      [] -> return []
-      ((p, l) : xs) -> do
-        c <- liftIO $ newIORef 0
-        let cxt :: HList '["NameCounter" :- IORef Int, "RHSId" :- RHSId, "MatchId" :- MatchId, "LabelSet" :- Set.Set Label, "Var" :- Id, "RHSTerm" :- Fix ExprSig EXPR]
-            cxt = Field c :| Field [n] :| Field [n] :| Field Set.empty :| Field (strId "") :| Field l :| HNil
-        tail <- (executePatternExpansion (iMatch exp xs) (n + 1))
-        ((fst <$>) . runWriterT . flip runReaderT cxt $ patExpansion (astToAccess exp) p) >>= (\x -> return (x : tail))
-  ),
-  exprCase @Expr expr (\case
-    _ -> Fail.fail "Not a match expression"
-  )]
-  where
-    exprCase :: forall f y. (f :<: ExprSig) => 
-      Fix ExprSig EXPR -> (f (Fix ExprSig) EXPR -> y) -> Maybe y
-    exprCase = lCase
+mergePat :: (Fail.MonadFail m) => Fix SimplePatSig SimplePat -> Fix SimplePatSig SimplePat -> m (Subst Id)
+mergePat a b = caseH
+  (\case
+    IdPat ia -> caseH (\case
+      IdPat ib -> return (Map.singleton ia ib)
+      _ -> Fail.fail "cannot merge"
+      ) (const $ Fail.fail "cannot merge") (unTerm b)
+    LabelPat la -> caseH (\case
+      LabelPat lb | la == lb -> return Map.empty
+      _ -> Fail.fail "cannot merge"
+      ) (const $ Fail.fail "cannot merge") (unTerm b)
+  )
+  (\case
+    AppIdPat la ia -> caseH (const $ Fail.fail "cannot merge") (\case
+      AppIdPat lb ib | la == lb -> return (Map.singleton ia ib)
+      _ -> Fail.fail "cannot merge"
+      ) (unTerm b)
+  ) (unTerm a)
 
-patternElaboration :: Fix ExprSig EXPR -> Fix ExprSig EXPR
-patternElaboration m = undefined
+patProp :: Fix SimplePatSig SimplePat -> PatProp
+patProp p = caseH (\case
+  IdPat _ -> Var
+  LabelPat _ -> NonVar
+  ) (const NonVar) (unTerm p)
 
+patToExpr :: (Expr :<: e, LabelExpr LabelAsFun :<: e, RecordOps :<: e) => Fix SimplePatSig SimplePat -> Fix e EXPR
+patToExpr p = caseH (\case
+  IdPat i -> iIdExpr i
+  LabelPat l -> iLabelApp l (iRecordCons [])
+  ) (\case
+  AppIdPat l i -> iLabelApp l (iIdExpr i)
+  ) (unTerm p)
+
+patId :: (Fail.MonadFail m) => Fix SimplePatSig SimplePat -> m Id
+patId p = caseH (\case
+  IdPat i -> return i
+  LabelPat _ -> Fail.fail "no identifier found"
+  ) (\case
+  AppIdPat _ i -> return i
+  ) (unTerm p)
+
+matchChainListToTree :: Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel ->
+  Fix (TaggedMatchChainSig e SimplePatSig SimplePat) TreeModel
+matchChainListToTree mc = case unTerm mc of
+  MatchChainList a (p, cs) :&: m -> iAMatchChainTree m a [(p, matchChainListToTree cs)]
+  RHSExpr e :&: m -> iARHSExpr m e
+
+getRHSId :: Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel -> MatchId
+getRHSId mc = case unTerm mc of
+  RHSExpr _ :&: m -> m
+  MatchChainList _ (_, cs) :&: _ -> getRHSId cs
+
+matchChainMerging :: forall e ts ts' m. (Update ("Subst" :- Subst (Fix e EXPR)) ts HList,
+  MonadIO m, Occurs ("NameCounter" :- IORef Int) ts HList,
+  MonadReader (HList ts) m, Fail.MonadFail m, HTraversable e, Substitutable e e m, 
+  Expr :<: e, ContainFV e, LabelExpr LabelAsFun :<: e, RecordOps :<: e, 
+  Update ("RHSOccur" :- Map.Map MatchId Int) ts' HList,
+  MonadState (HList ts') m) =>
+  Fix (TaggedMatchChainSig e SimplePatSig SimplePat) TreeModel ->
+  Fix (TaggedMatchChainSig e SimplePatSig SimplePat) ListModel ->
+  m (Fix (TaggedMatchChainSig e SimplePatSig SimplePat) TreeModel)
+matchChainMerging mt mc = case unTerm mt of
+  MatchChainTree mta bs :&: mtid -> case unTerm (selectCandidate mta mtid mc) of
+    candidate@(MatchChainList mca (mcp, mcs) :&: mcid) | length mtid == length mcid -> 
+      case accessMerge mta mca of
+        Just a -> case patProp mcp of
+          NonVar -> do
+            let process [] = do
+                  MS.modify (HL.modify @"RHSOccur" @(Map.Map MatchId Int) (Map.adjust (+ 1) (getRHSId mcs)))
+                  return [(mcp, matchChainListToTree mcs)]
+                process ((p, rhs) : rest) = case mergePat mcp p of
+                  Just s -> do
+                    let vs = Map.map iIdExpr s :: Subst (Fix e EXPR)
+                    mcs' <- local (HL.modify @"Subst" @(Subst (Fix e EXPR)) (const vs)) 
+                      (getCompose $ cata substAlg mcs)
+                    ((: rest) . (p,)) <$> matchChainMerging rhs mcs'
+                  Nothing -> case patProp p of
+                    Var -> if length rest /= 0 then Fail.fail "impossible" else do
+                      pi <- patId p
+                      rhs' <- matchChainMerging rhs (iAMatchChainList mcid (IAccess pi) (mcp, mcs))
+                      return [(p, rhs')]
+                    NonVar -> ((p, rhs) :) <$> process rest
+            bs' <- process bs
+            return $ iAMatchChainTree mtid a bs'
+          Var -> do
+            mcpi <- patId mcp
+            let process (p, rhs) = do
+                  let vs = Map.singleton mcpi (patToExpr p) :: Subst (Fix e EXPR)
+                  mcs' <- local (HL.modify @"Subst" @(Subst (Fix e EXPR)) (const vs)) 
+                    (getCompose $ cata substAlg mcs)
+                  (p,) <$> matchChainMerging rhs mcs'
+            bs' <- mapM process bs
+            case patProp (fst $ last bs) of
+              Var -> return $ iAMatchChainTree mtid a bs'
+              NonVar -> do
+                MS.modify (HL.modify @"RHSOccur" @(Map.Map MatchId Int) (Map.adjust (+ 1) (getRHSId mcs)))
+                return $ iAMatchChainTree mtid a (bs' ++ [(mcp, matchChainListToTree mcs)])
+        Nothing -> do
+          freshId <- genFreshId "#x"
+          matchChainMerging mt (iAMatchChainList mtid mta (iIdPat freshId, Term candidate))
+    candidate -> do
+      freshId <- genFreshId "#x"
+      matchChainMerging mt (iAMatchChainList mtid mta (iIdPat freshId, Term candidate))
+  rhs -> return $ Term rhs
+
+matchChainToExpr :: (Expr :<: e, RecordOps :<: e, Match SimplePatSig SimplePat :<: e, RHS MatchId :<: e) => 
+  Fix (TaggedMatchChainSig e SimplePatSig SimplePat) TreeModel -> Fix e EXPR
+matchChainToExpr mc = case unTerm mc of
+  MatchChainTree a bs :&: _ -> iMatch (accessToAST a) (map (second matchChainToExpr) bs)
+  RHSExpr e :&: m -> iRHS m e
+
+class PatElab f g m where
+  patElabAlg :: Alg f (Compose m (Fix g))
+
+$(derive [liftSum] [''PatElab])
+
+instance {-# OVERLAPPABLE #-} (Monad m, HTraversable f, f :<: g) => PatElab f g m where
+  patElabAlg = Compose . fmap inject . hmapM getCompose
+
+instance {-# OVERLAPPABLE #-} (MonadIO m, Occurs ("NameCounter" :- IORef Int) ts HList,
+  MonadReader (HList ts) m, Fail.MonadFail m, 
+  Update ("MatchCounter" :- Int) ts' HList,
+  Update ("RHSOccur" :- Map.Map MatchId Int) ts' HList,
+  MonadState (HList ts') m,
+  Match SimplePatSig SimplePat :<: g, RHS MatchId :<: g, HTraversable g,
+  Substitutable g g ((ReaderT (HList '["NameCounter" :- IORef Int, "Subst" :- Subst (Fix g EXPR)]) m)), 
+  Expr :<: g, ContainFV g, LabelExpr LabelAsFun :<: g, RecordOps :<: g) => 
+  PatElab (Match ComplexPatSig ComplexPat) g m where
+  patElabAlg (Match e cs) = Compose $ do
+    freshId <- genFreshId "#x"
+    let placeholder = IAccess freshId
+    nameCounter <- HL.select @"NameCounter" @(IORef Int) <$> ask
+    let eachCase rhsCounter (p, rhs) = do
+          cataM pvAlg p
+          rhs' <- getCompose rhs
+          matchCounter <- HL.select @"MatchCounter" @Int <$> MS.get
+          let rhsId = [matchCounter, rhsCounter]
+              cxt :: HList '["NameCounter" :- IORef Int, "RHSId" :- MatchId, "MatchId" :- MatchId,
+                             "LabelSet" :- Set.Set Label, "Var" :- Id, "RHSTerm" :- Fix g EXPR]
+              cxt = Field nameCounter :| Field rhsId :| Field [0] :| 
+                    Field Set.empty :| Field (strId "") :| Field rhs' :| HNil
+          expanded <- (fst <$>) . runWriterT . flip runReaderT cxt $ patExpansion @g placeholder p
+          MS.modify (HL.modify @"RHSOccur" @(Map.Map MatchId Int) (Map.insert rhsId 0))
+          return $ (listToMatchChain (matchChainGrouping (expanded, [])), rhsId)
+        process (rhsCounter, acc) now = do
+          (now', _) <- eachCase rhsCounter now
+          let cxt :: HList '["NameCounter" :- IORef Int, "Subst" :- Subst (Fix g EXPR)]
+              cxt = Field nameCounter :| Field Map.empty :| HNil
+          acc' <- flip runReaderT cxt $ matchChainMerging @g acc now'
+          return (rhsCounter + 1, acc')
+    (c', firstRHSId) <- first matchChainListToTree <$> eachCase 0 (head cs)
+    MS.modify (HL.modify @"RHSOccur" @(Map.Map MatchId Int) (Map.adjust (+ 1) firstRHSId))
+    (_, cs') <- foldM process (1, c') (tail cs)
+    rhsOccur <- HL.select @"RHSOccur" @(Map.Map MatchId Int) <$> get
+    if Map.filter (== 0) rhsOccur /= Map.empty then Fail.fail "unused RHS"
+    else do
+      MS.modify (HL.modify @"MatchCounter" @Int (+ 1))
+      e' <- getCompose e
+      case project (matchChainToExpr cs') :: Maybe (Match SimplePatSig SimplePat (Fix g) EXPR) of
+       Just (Match _ cs') -> return $ iMatch e' cs'
+       Nothing -> Fail.fail "impossible"
+
+{-
 matchString1 :: String
 matchString1 = [r|match exp with <
   {Snd: F | Trd: T} => 1 |
@@ -407,96 +770,4 @@ matchString3 =[r|match x with <
     Success a => f a
   | Failure b => Failure b
 >|]
-
-matchExample1 :: Fix ExprSig EXPR
-matchExample1 = head (rights [testRun match matchString1])
-
-matchExample2 :: Fix ExprSig EXPR
-matchExample2 = head (rights [testRun match matchString2])
-
-matchExample3 :: Fix ExprSig EXPR
-matchExample3 = head (rights [testRun match matchString3])
-
-testPE :: Fix ExprSig EXPR -> IO ()
-testPE p = do
-  r <- runExceptT (executePatternExpansion p 0)
-  case r of
-    Right r -> print r
-    Left m -> putStrLn m
-
-testSorting :: Fix ExprSig EXPR -> IO () 
-testSorting p = do
-  r <- runExceptT (executePatternExpansion p 0)
-  case r of
-    Right r -> do
-      print (map (\xs -> listToMatchChain (matchChainGrouping (xs, []))) r)
-    Left m -> putStrLn m
-
-{-
-(NonVar,MatchChainList IRAccess exp (IdPat #a0)[0])
-(NonVar,MatchChainList IFAccess #a0 Snd (LabelPat F)[0,0])
-(NonVar,MatchChainList IFAccess #a0 Trd (LabelPat T)[0,1])
-(Var,RHSExpr)
-
-(NonVar,MatchChainList IRAccess exp (IdPat #a0)[1])
-(NonVar,MatchChainList IFAccess #a0 Fst (LabelPat F)[1,0])
-(NonVar,MatchChainList IFAccess #a0 Snd (LabelPat T)[1,1])
-(Var,RHSExpr)
-
-(NonVar,MatchChainList IRAccess exp (IdPat #a0)[2])
-(NonVar,MatchChainList IFAccess #a0 Trd (LabelPat F)[2,0])
-(Var,RHSExpr)
-
-(NonVar,MatchChainList IAccess x (AppIdPat App #a0)[0])
-(NonVar,MatchChainList IFAccess #a0 Fun (AppIdPat App #a4)[0,0])
-(NonVar,MatchChainList IFAccess #a4 Fun (AppIdPat Primitive #a5)[0,0,0])
-(NonVar,MatchChainList IAccess #a5 (LabelPat Map)[0,0,0,0])
-(Var,MatchChainList IFAccess #a4 Arg (IdPat f)[0,0,1])
-(NonVar,MatchChainList IFAccess #a0 Arg (AppIdPat App #a1)[0,1])
-(NonVar,MatchChainList IFAccess #a1 Fun (AppIdPat App #a2)[0,1,0])
-(NonVar,MatchChainList IFAccess #a2 Fun (AppIdPat Primitive #a3)[0,1,0,0])
-(NonVar,MatchChainList IAccess #a3 (LabelPat Map)[0,1,0,0,0])
-(Var,MatchChainList IFAccess #a2 Arg (IdPat g)[0,1,0,1])
-(Var,MatchChainList IFAccess #a1 Arg (IdPat x)[0,1,1])
-(Var,RHSExpr)
-
-(Var,MatchChainList IAccess x (IdPat #a0)[1]),
-(Var,RHSExpr)
--}
-
-{- 
-*** sorting example one ***
-[(MatchChainList IRAccess exp ((IdPat #a0), 
- (MatchChainList IFAccess #a0 Snd ((LabelPat F), 
- (MatchChainList IFAccess #a0 Trd ((LabelPat T), 
- (RHSExpr (AppExpr (LabelLit 1) (RecordCons ))) :&: [0])) :&: [0,1])) :&: [0,0])) :&: [0],
-
- (MatchChainList IRAccess exp ((IdPat #a0), 
- (MatchChainList IFAccess #a0 Fst ((LabelPat F), 
- (MatchChainList IFAccess #a0 Snd ((LabelPat T), 
- (RHSExpr (AppExpr (LabelLit 2) (RecordCons ))) :&: [1])) :&: [1,1])) :&: [1,0])) :&: [1],
-
- (MatchChainList IRAccess exp ((IdPat #a0), (MatchChainList IFAccess #a0 Trd ((LabelPat F), 
- (RHSExpr (AppExpr (LabelLit 3) (RecordCons ))) :&: [2])) :&: [2,0])) :&: [2],
-
- (MatchChainList IRAccess exp ((IdPat #a0), (MatchChainList IFAccess #a0 Trd ((LabelPat T), 
- (RHSExpr (AppExpr (LabelLit 4) (RecordCons ))) :&: [3])) :&: [3,0])) :&: [3]]
-
-*** sorting example two ***
-[(MatchChainList IAccess x ((AppIdPat App #a0), 
- (MatchChainList IFAccess #a0 Fun ((AppIdPat App #a4), 
- (MatchChainList IFAccess #a4 Fun ((AppIdPat Primitive #a5), 
- (MatchChainList IAccess #a5 ((LabelPat Map), 
- (MatchChainList IFAccess #a0 Arg ((AppIdPat App #a1), 
- (MatchChainList IFAccess #a1 Fun ((AppIdPat App #a2), 
- (MatchChainList IFAccess #a2 Fun ((AppIdPat Primitive #a3), 
- (MatchChainList IAccess #a3 ((LabelPat Map), 
- (MatchChainList IFAccess #a4 Arg ((IdPat f), 
- (MatchChainList IFAccess #a2 Arg ((IdPat g), 
- (MatchChainList IFAccess #a1 Arg ((IdPat x), 
- (RHSExpr (AppExpr (LabelLit Success) (AppExpr (LabelLit App) (RecordCons (Fun, (AppExpr (LabelLit App) (RecordCons (Fun, (AppExpr (LabelLit Primitive) (LabelLit Map))), (Arg, (AppExpr (LabelLit Lam) (RecordCons (Param, (AppExpr (LabelLit 0) (RecordCons ))), (Body, (AppExpr (LabelLit App) (RecordCons (Fun, (IdExpr f)), (Arg, (AppExpr (LabelLit App) (RecordCons (Fun, (IdExpr g)), (Arg, (AppExpr (LabelLit Id) (RecordCons (Name, (AppExpr (LabelLit 0) (RecordCons )))))))))))))))))), (Arg, (IdExpr x)))))) 
- :&: [0])) :&: [0,1,1])) :&: [0,1,0,1])) :&: [0,0,1])) :&: [0,1,0,0,0])) :&: [0,1,0,0])) :&: [0,1,0])) :&: [0,1])) :&: [0,0,0,0])) :&: [0,0,0])) :&: [0,0])) :&: [0],
- 
- (MatchChainList IAccess x ((IdPat #a0), 
- (RHSExpr (AppExpr (LabelLit Failure) (AppExpr (LabelLit 1) (RecordCons )))) :&: [1])) :&: [1]]
 -}

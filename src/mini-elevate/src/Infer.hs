@@ -190,8 +190,8 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
 instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m, 
   Occurs ("NameCounter" :- IORef Int) ts HList,
   Update ("TypeEnv" :- TypeEnv) ts HList,
-  MonadReader (HList ts) m, FunDef InferPresSig InferTypeSig :<: g, DistAnn g TypeRep h) => 
-  Infer (FunDef InferPresSig InferTypeSig) h m where
+  MonadReader (HList ts) m, FunDef p t :<: g, DistAnn g TypeRep h) => 
+  Infer (FunDef p t) h m where
 
   inferAlg (FunDef name c t f e) = Compose $ do
     (f', cs) <- listen (getCompose f)
@@ -207,8 +207,8 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
 instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m, 
   Occurs ("NameCounter" :- IORef Int) ts HList,
   Update ("TypeEnv" :- TypeEnv) ts HList,
-  MonadReader (HList ts) m, RecDef InferPresSig InferTypeSig :<: g, DistAnn g TypeRep h) => 
-  Infer (RecDef InferPresSig InferTypeSig) h m where
+  MonadReader (HList ts) m, RecDef p t :<: g, DistAnn g TypeRep h) => 
+  Infer (RecDef p t) h m where
 
   inferAlg (RecDef name c t f e) = Compose $ do
     self <- genFreshIdType Type
@@ -287,7 +287,54 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
     t <- typeRep (RecordRep row)
     let fields' = map fst fieldsTypes
     return $ iARecordCons t fields'
-  inferAlg _ = Compose $ Fail.fail "TODO"
+  inferAlg (FieldAccess r l) = Compose $ do
+    r' <- getCompose r
+    let rType = getType r'
+    rv <- genFreshIdType (RowLack (L.singleton l))
+    fieldType <- genFreshIdType Type
+    row <- typeRep (RowRep (Map.singleton l fieldType) rv)
+    rTypeUni <- typeRep (RecordRep row)
+    tell [(rType, rTypeUni)]
+    return $ iAFieldAccess fieldType r' l
+  inferAlg (FieldRemove r l) = Compose $ do
+    r' <- getCompose r
+    let rType = getType r'
+    rv <- genFreshIdType (RowLack (L.singleton l))
+    fieldType <- genFreshIdType Type
+    row <- typeRep (RowRep (Map.singleton l fieldType) rv)
+    rTypeUni <- typeRep (RecordRep row)
+    restType <- typeRep (RecordRep rv)
+    tell [(rType, rTypeUni)]
+    return $ iAFieldRemove restType r' l
+  inferAlg (RecordMod r mod) = Compose $ do
+    r' <- getCompose r
+    let rType = getType r'
+    let process (l, e) = do
+          e' <- getCompose e
+          let eType = getType e'
+          return ((l, e'), (l, eType))
+    modTypes <- mapM process mod
+    rv <- genFreshIdType (RowLack (L.fromList (map fst mod)))
+    row <- typeRep (RowRep (Map.fromList (map snd modTypes)) rv)
+    modType <- typeRep (RecordRep row)
+    let mod' = map fst modTypes
+    tell [(rType, modType)]
+    return $ iARecordMod rType r' mod'
+  inferAlg (RecordExt r ext) = Compose $ do
+    r' <- getCompose r
+    let rType = getType r'
+    let process (l, e) = do
+          e' <- getCompose e
+          let eType = getType e'
+          return ((l, e'), (l, eType))
+    extTypes <- mapM process ext
+    rv <- genFreshIdType (RowLack (L.fromList (map fst ext)))
+    row <- typeRep (RowRep (Map.fromList (map snd extTypes)) rv)
+    rTypeUni <- typeRep (RecordRep rv)
+    extType <- typeRep (RecordRep row)
+    let m' = map fst extTypes
+    tell [(rType, rTypeUni)]
+    return $ iARecordExt extType r' m'
 
 {-
 instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m, 
@@ -378,6 +425,16 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
       Just t -> tell [(t, emptyType)]
       Nothing -> return ()
     return $ iAMatch rhsIdType e' cases'
+
+instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m, 
+  Occurs ("NameCounter" :- IORef Int) ts HList,
+  Update ("TypeEnv" :- TypeEnv) ts HList,
+  MonadReader (HList ts) m, RHS i :<: g, DistAnn g TypeRep h) => 
+  Infer (RHS i) h m where
+  inferAlg (RHS i e) = Compose $ do
+    e' <- getCompose e
+    let eType = getType e'
+    return $ iARHS eType i e'
 
 type TestSig = RecDef InferPresSig InferTypeSig :+: FunDef InferPresSig InferTypeSig :+: Expr :+: Match InferPatSig SimplePat :+: LabelExpr LabelAsFun :+: RecordOps
 

@@ -121,33 +121,36 @@ data LabelExpr :: * -> (* -> *) -> * -> * where
 data Match :: ((* -> *) -> * -> *) -> * -> (* -> *) -> * -> * where
   Match :: e EXPR -> [(Fix p l, e EXPR)] -> Match p l e EXPR
 
+data RHS :: * -> (* -> *) -> * -> * where
+  RHS :: i -> e EXPR -> RHS i e EXPR
+
 $(derive [makeHFunctor, makeHFoldable, makeHTraversable] 
          [''Pres, ''UnknownPres, 
           ''Row, ''Type, ''UnknownType, ''RecVariantType,
           ''Scheme, ''IdScheme, ''SchemeInst,
           ''Pat, ''AppPat, ''RecordPat, ''MatchAllPat,
-          ''Expr, ''FunDef, ''RecDef, ''TypeDef, ''RecordOps, ''LabelExpr, ''Match])
+          ''Expr, ''FunDef, ''RecDef, ''TypeDef, ''RecordOps, ''LabelExpr, ''Match, ''RHS])
 
 $(derive [smartConstructors, smartAConstructors] 
          [''Pres, {-''UnknownPres, -}
           {-''Row, -}''Type, {-''UnknownType, -}''RecVariantType,
           ''Scheme, ''IdScheme, ''SchemeInst,
           ''Pat, ''AppPat, ''RecordPat, {-''MatchAllPat,-}
-          ''Expr, ''FunDef, ''RecDef, ''TypeDef, ''RecordOps, ''LabelExpr, ''Match])
+          ''Expr, ''FunDef, ''RecDef, ''TypeDef, ''RecordOps, ''LabelExpr, ''Match, ''RHS])
 
 $(derive [makeEqHF, makeOrdHF] 
          [''Pres, ''UnknownPres, 
           {-''Row, -}''Type, ''UnknownType, ''RecVariantType,
           {-''Scheme, -}''IdScheme, {-''SchemeInst,-}
           ''Pat, ''AppPat, {-''RecordPat, -}''MatchAllPat,
-          ''Expr{-, ''FunDef-}{-, ''RecDef-}{-, ''TypeDef-}{-, ''RecordOps-}{-, ''LabelExpr-}{-, ''Match-}])
+          ''Expr{-, ''FunDef-}{-, ''RecDef-}{-, ''TypeDef-}{-, ''RecordOps-}{-, ''LabelExpr-}{-, ''Match-}{-, ''RHS-}])
 
 $(derive [makeShowHF] 
          [''Pres, ''UnknownPres, 
           {-''Row, -}''Type, ''UnknownType, ''RecVariantType,
           {-''Scheme, -}''IdScheme, {-''SchemeInst,-}
           ''Pat, ''AppPat, {-''RecordPat, -}''MatchAllPat,
-          ''Expr{-, ''FunDef-}{-, ''RecDef-}{-, ''TypeDef-}{-, ''RecordOps-}{-, ''LabelExpr-}{-, ''Match-}])
+          ''Expr{-, ''FunDef-}{-, ''RecDef-}{-, ''TypeDef-}{-, ''RecordOps-}{-, ''LabelExpr-}{-, ''Match-}, ''RHS])
 
 {- based on automatically generated code-}
 
@@ -403,7 +406,16 @@ instance (HFunctor a_a2AD, OrdHF a_a2AD) => OrdHF (Match a_a2AD b_a2AE) where
   compareHF (Match x_aakz x_aakA) (Match y_aakB y_aakC)
     = compList
         [(kcompare x_aakz) y_aakB, (kcompareTList x_aakA) y_aakC]
-          
+
+instance Eq a_aasm => EqHF (RHS a_aasm) where
+  eqHF (RHS x_aelp x_aelq) (RHS y_aelr y_aels)
+    = and [(x_aelp == y_aelr), (x_aelq `keq` y_aels)]
+
+instance (Ord a_aasm) => OrdHF (RHS a_aasm) where
+  compareHF (RHS x_aelv x_aelw) (RHS y_aelx y_aely)
+    = compList
+        [(compare x_aelv) y_aelx, (kcompare x_aelw) y_aely]
+
 showConstr :: String -> [String] -> String
 showConstr con [] = con
 showConstr con args = "(" ++ con ++ " " ++ unwords args ++ ")"
@@ -432,7 +444,8 @@ instance ShowHF RecordPat where
   showHF (RecordPat x_a9OQ)
     = (K $ (showConstr
               "RecordPat")
-              [show $ map (second unK) x_a9OQ])
+              [(\x -> "[" ++ x ++ "]") . intercalate ", " $ 
+                map (\(a, b) -> "(" ++ show a ++ ", " ++ unK b ++ ")") x_a9OQ])
 
 instance (HFunctor a_a2ql, HFunctor b_a2qm, ShowHF a_a2ql, ShowHF b_a2qm) =>
           ShowHF (FunDef a_a2ql b_a2qm) where
@@ -460,7 +473,8 @@ instance ShowHF RecordOps where
   showHF (RecordCons x_a9Pn)
     = (K $ (showConstr
               "RecordCons")
-              [intercalate ", " $ map (\(a, b) -> "(" ++ show a ++ ", " ++ unK b ++ ")") x_a9Pn])
+              [(\x -> "[" ++ x ++ "]") . intercalate ", " $ 
+                map (\(a, b) -> "(" ++ show a ++ ", " ++ unK b ++ ")") x_a9Pn])
   showHF (FieldAccess x_a9Po x_a9Pp)
     = (K $ (showConstr
               "FieldAccess")
@@ -472,18 +486,21 @@ instance ShowHF RecordOps where
   showHF (RecordMod x_a9Ps x_a9Pt)
     = (K $ (showConstr
               "RecordMod")
-              [unK x_a9Ps, show $ map (second unK) x_a9Pt])
+              [unK x_a9Ps, (\x -> "[" ++ x ++ "]") . intercalate ", " $ 
+                map (\(a, b) -> "(" ++ show a ++ ", " ++ unK b ++ ")") x_a9Pt])
   showHF (RecordExt x_a9Pu x_a9Pv)
     = (K $ (showConstr
               "RecordExt")
-              [unK x_a9Pu, show $ map (second unK) x_a9Pv])
+              [unK x_a9Pu, (\x -> "[" ++ x ++ "]") . intercalate ", " $ 
+                map (\(a, b) -> "(" ++ show a ++ ", " ++ unK b ++ ")") x_a9Pv])
 
 instance (HFunctor a_a2vo, ShowHF a_a2vo) =>
           ShowHF (Match a_a2vo b_a2vp) where
   showHF (Match x_a9Pz x_a9PA)
     = (K $ (showConstr
               "Match")
-              [unK x_a9Pz, show $ map (second unK) x_a9PA])
+              [unK x_a9Pz, (\x -> "[" ++ x ++ "]") . intercalate ", " $ 
+                map (\(a, b) -> "(" ++ show a ++ ", " ++ unK b ++ ")") x_a9PA])
 
 instance ShowHF SchemeInst where
   showHF (SchemeInst x_a9Uw x_a9Ux x_a9Uy)

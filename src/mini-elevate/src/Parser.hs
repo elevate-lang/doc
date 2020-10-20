@@ -27,7 +27,7 @@ type PatSig = RecordPat :+: AppPat :+: Pat :+: MatchAllPat
 
 type ExprSig = Expr :+: FunDef PresSig TypeSig :+: TypeDef TypeSig :+: RecordOps :+: LabelExpr LabelAsLit :+: Match PatSig ComplexPat
 
-type FullSig = Expr :+: FunDef PresSig TypeSig :+: RecDef PresSig TypeSig :+: TypeDef TypeSig :+: RecordOps :+: LabelExpr LabelAsLit :+: Match PatSig ComplexPat
+type FullSig = Expr :+: FunDef PresSig TypeSig :+: RecDef PresSig TypeSig :+: TypeDef TypeSig :+: RecordOps :+: LabelExpr LabelAsFun :+: Match PatSig ComplexPat
 
 parens :: (Monad m) => Parser m u a -> Parser m u a
 parens p = char '(' *> many space *> p <* many space <* char ')'
