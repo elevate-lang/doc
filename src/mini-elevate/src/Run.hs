@@ -106,6 +106,43 @@ let mapFusion =
     Success (App {Fun: App {Fun: Primitive Map | Arg: Lam {Param: 0 | Body: App {Fun: f | Arg: App {Fun: g | Arg: Id {Name: 0}}}}} | Arg: x})
   | _ => Failure 1
   > in 
-    
-{Repeat: repeat}
+
+{
+  Id: id |
+  Fail: fail |
+  FlatMapSuccess: flatMapSuccess |
+  FlatMapFailure: flatMapFailure |
+  Seq: seq |
+  LChoice: lChoice |
+  Try: try |
+  Repeat: repeat |
+  IdToTranspose: idToTranspose |
+  MapFusion: mapFusion
+}
 |]
+
+{-
+{
+
+Fail: t228 -> <Failure: <1: {*} | r230: ~{1}> | r231: ~{Failure}> | 
+
+FlatMapFailure: <Success: t236 | Failure: t237 | *> -> (t237 -> <Success: t236 | r239: ~{Success}>) -> <Success: t236 | r239: ~{Success}> | 
+
+FlatMapSuccess: <Success: t232 | Failure: t233 | *> -> (t232 -> <Failure: t233 | r235: ~{Failure}>) -> <Failure: t233 | r235: ~{Failure}> | 
+
+Id: t226 -> <Success: t226 | r227: ~{Success}> | 
+
+IdToTranspose: <App: {Fun: <Primitive: <Id: {*} | r259: ~{Id}> | r260: ~{Primitive}> | Arg: t261 | r262: ~{Arg, Fun}} | r263: ~{App}> -> <Failure: <1: {*} | r264: ~{1}> | Success: <App: {Arg: t261 | Fun: <Lam: {Body: <App: {Arg: <App: {Arg: <Id: {Name: <0: {*} | r265: ~{0}> | *} | r266: ~{Id}> | Fun: <Primitive: <Transpose: {*} | r267: ~{Transpose}> | r268: ~{Primitive}> | *} | r269: ~{App}> | Fun: <Primitive: <Transpose: {*} | r270: ~{Transpose}> | r271: ~{Primitive}> | *} | r272: ~{App}> | Param: <0: {*} | r273: ~{0}> | *} | r274: ~{Lam}> | *} | r275: ~{App}> | r276: ~{Failure, Success}> | 
+
+LChoice: (t245 -> <Success: t246 | Failure: t247 | *>) -> (t245 -> <Success: t246 | r249: ~{Success}>) -> t245 -> <Success: t246 | r249: ~{Success}> | 
+
+MapFusion: <App: {Fun: <App: {Fun: <Primitive: <Map: {*} | r278: ~{Map}> | r279: ~{Primitive}> | Arg: t280 | r281: ~{Arg, Fun}} | r282: ~{App}> | Arg: <App: {Fun: <App: {Fun: <Primitive: <Map: {*} | r283: ~{Map}> | r284: ~{Primitive}> | Arg: t285 | r286: ~{Arg, Fun}} | r287: ~{App}> | Arg: t288 | r289: ~{Arg, Fun}} | r290: ~{App}> | r291: ~{Arg, Fun}} | r292: ~{App}> -> <Failure: <1: {*} | r293: ~{1}> | Success: <App: {Arg: t288 | Fun: <App: {Arg: <Lam: {Body: <App: {Arg: <App: {Arg: <Id: {Name: <0: {*} | r294: ~{0}> | *} | r295: ~{Id}> | Fun: t285 | *} | r296: ~{App}> | Fun: t280 | *} | r297: ~{App}> | Param: <0: {*} | r298: ~{0}> | *} | r299: ~{Lam}> | Fun: <Primitive: <Map: {*} | r300: ~{Map}> | r301: ~{Primitive}> | *} | r302: ~{App}> | *} | r303: ~{App}> | r304: ~{Failure, Success}> | 
+
+Repeat: (t254 -> <Success: t254 | Failure: t255 | *>) -> t254 -> <Success: t254 | Failure: t255 | *> | 
+
+Seq: (t240 -> <Success: t241 | Failure: t242 | *>) -> (t241 -> <Failure: t242 | r244: ~{Failure}>) -> t240 -> <Failure: t242 | r244: ~{Failure}> | 
+
+Try: (t250 -> <Success: t250 | Failure: t251 | *>) -> t250 -> <Success: t250 | r253: ~{Success}> | 
+
+*}
+-}
