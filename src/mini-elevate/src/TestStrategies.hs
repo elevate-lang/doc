@@ -63,13 +63,24 @@ let try s = lChoice s id in
 let repeat s = try (seq s (repeat s)) in _
 |]
 
-{- Traversal -}
-traversal :: String
-traversal = [r|
+{- 
+  Traversal (RISE)
+  ref : https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/traversal.scala
+  TODO : The DepLambda cases in body are omitted here
+-}
+traversal1 :: String
+traversal1 = [r|
   let mapSuccess rr f = 
     match rr with <
       Success a => Success (f a)
     | Failure b => Failure b
+    > in
+  
+  let body s e =
+    match e with <
+      Lam {Param: Nat | Body: App {Fun: f | Arg: Id {Name: Nat}} | Arg: x} =>
+      Success (mapSuccess (s f) (Lam {Param: _ | Body: _ | Arg: x}))
+    | _ => Failure s
     > in
 
   let function s e =
@@ -86,6 +97,24 @@ traversal = [r|
     | _ => Failure s
     > in _
 |]
+
+{-
+  Traversal (ELEVATE)
+  ref: https://github.com/elevate-lang/elevate/blob/master/src/main/scala/elevate/core/strategies/traversal.scala
+-}
+traversal2 :: String
+traversal2 = [r|
+  let topDown s p = (lChoice s (one (topDown s))) p in
+  
+  let bottomUp s p = (lChoice (one (bottomUp s)) s) p in
+
+  let allTopdown s p = (seq s (all (allTopdown s))) p in
+
+  let allBottomup s p = (seq (all (allBottomup s)) s) p in
+  
+  let tryAll s p = (seq (all (tryAll (try s))) s) p in _
+|]
+
 
 {- Algorithmic and movement -}
 
