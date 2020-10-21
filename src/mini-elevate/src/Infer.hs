@@ -283,7 +283,7 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
           return ((l, e'), (l, eType))
     fieldsTypes <- mapM process fields
     emptyRow <- typeRep (IdTypeRep (tIdRep (strId "*") (RowPres L.empty)))
-    row <- typeRep (RowRep (Map.fromList (map snd fieldsTypes)) emptyRow)
+    row <- if length fields == 0 then return emptyRow else typeRep (RowRep (Map.fromList (map snd fieldsTypes)) emptyRow)
     t <- typeRep (RecordRep row)
     let fields' = map fst fieldsTypes
     return $ iARecordCons t fields'
@@ -315,7 +315,7 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
           return ((l, e'), (l, eType))
     modTypes <- mapM process mod
     rv <- genFreshIdType (RowLack (L.fromList (map fst mod)))
-    row <- typeRep (RowRep (Map.fromList (map snd modTypes)) rv)
+    row <- if length mod == 0 then return rv else typeRep (RowRep (Map.fromList (map snd modTypes)) rv)
     modType <- typeRep (RecordRep row)
     let mod' = map fst modTypes
     tell [(rType, modType)]
@@ -329,7 +329,7 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
           return ((l, e'), (l, eType))
     extTypes <- mapM process ext
     rv <- genFreshIdType (RowLack (L.fromList (map fst ext)))
-    row <- typeRep (RowRep (Map.fromList (map snd extTypes)) rv)
+    row <- if length ext == 0 then return rv else typeRep (RowRep (Map.fromList (map snd extTypes)) rv)
     rTypeUni <- typeRep (RecordRep rv)
     extType <- typeRep (RecordRep row)
     let m' = map fst extTypes
@@ -516,5 +516,5 @@ testInfer prog = do
   case r of
     Right (r :: Fix ((RecDef InferPresSig InferTypeSig :&: TypeRep) :+: (FunDef InferPresSig InferTypeSig :&: TypeRep) :+: (Expr :&: TypeRep) :+: (Match InferPatSig SimplePat :&: TypeRep) :+: (LabelExpr LabelAsFun :&: TypeRep) :+: (RecordOps :&: TypeRep)) EXPR) -> do
       let finalType = getType r
-      putStrLn =<< showTypeRep finalType
+      putStrLn =<< showTypeRep False finalType
     Left m -> undefined

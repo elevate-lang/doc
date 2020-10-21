@@ -162,23 +162,31 @@ traverseTypeRep f t = do
           liftIO $ writeIORef dt (dtv {visited = 0})
           return result
 
-showTypeRep :: (Fail.MonadFail m, MonadIO m) => TypeRep -> m String
-showTypeRep t = do
+showTypeRep :: (Fail.MonadFail m, MonadIO m) => Bool -> TypeRep -> m String
+showTypeRep isConcise t = do
   c <- liftIO $ newIORef 0
-  let cxt :: HList '["NameCounter" :- IORef Int, "RecIds" :- Map.Map Int Id]
-      cxt = Field c :| Field Map.empty :| HNil
+  toHide <- if not isConcise then return Set.empty else (Map.keysSet . Map.filter (== 1)) <$> idTypeOccur t
+  let cxt :: HList '["NameCounter" :- IORef Int, "RecIds" :- Map.Map Int Id, "ToHide" :- Set.Set Id]
+      cxt = Field c :| Field Map.empty :| Field toHide :| HNil
   join $ (flip evalStateT False . flip runReaderT cxt) <$> traverseTypeRep (const showTypeRep') t
   where
     showTypeRep' :: (Fail.MonadFail m, MonadState Bool m,
       Occurs ("NameCounter" :- IORef Int) ts HList,
       Update ("RecIds" :- Map.Map Int Id) ts HList,
+      Occurs ("ToHide" :- Set.Set Id) ts HList,
       MonadReader (HList ts) m, MonadIO m) => VisitTypeRep (m String) -> m String
     showTypeRep' (RecBody n) = do
       recId <- (Map.lookup n . select @"RecIds" @(Map.Map Int Id)) <$> ask
       case recId of
         Just recId -> return (show recId)
         Nothing -> Fail.fail "impossible"
-    showTypeRep' (NonRec (IdTypeRep tid)) = return (show tid)
+    showTypeRep' (NonRec (IdTypeRep tid@(TIdRep {name = name, kind = kind}))) = do
+      isHidden <- (Set.member name . select @"ToHide" @(Set.Set Id)) <$> ask
+      case kind of
+        RowPres p | L.null p -> return (show tid)
+        Type -> return (show tid)
+        _ | isHidden -> return ""
+        _ -> return (show tid)
     showTypeRep' (NonRec (FunTypeRep arg ret)) = do
       pos <- get
       put True
@@ -201,3 +209,14 @@ showTypeRep t = do
       recId <- genFreshId "t"
       s <- local (HList.modify @"RecIds" @(Map.Map Int Id) (Map.insert n recId)) (showTypeRep' (NonRec t))
       return (show recId ++ " as (" ++ s ++ ")")
+
+idTypeOccur :: (MonadIO m, Fail.MonadFail m) => TypeRep -> m (Map.Map Id Int)
+idTypeOccur t = traverseTypeRep (const idTypeOccur') t
+  where
+    idTypeOccur' (RecBody _) = Map.empty
+    idTypeOccur' (RecHead _ t) = idTypeOccur' (NonRec t)
+    idTypeOccur' (NonRec (IdTypeRep (TIdRep {name = name}))) = Map.singleton name 1
+    idTypeOccur' (NonRec (FunTypeRep arg ret)) = Map.unionWith (+) arg ret
+    idTypeOccur' (NonRec (RowRep ls r)) = Map.unionWith (+) (Map.unionsWith (+) ls) r
+    idTypeOccur' (NonRec (VariantRep r)) = r
+    idTypeOccur' (NonRec (RecordRep r)) = r

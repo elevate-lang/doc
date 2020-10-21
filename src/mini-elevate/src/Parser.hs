@@ -145,8 +145,8 @@ atomicTerm = parens term <|> (iLabelLit <$> label) <|> (iAppExpr <$> (iLabelLit 
 recordTerm :: (Monad m) => Parser m u (Fix ExprSig EXPR)
 recordTerm = atomicTerm >>= recordOps
   where 
-    recordOps t = fieldAccess t <|> fieldRemove t <|> 
-      recordMod t <|> recordExt t <|> return t
+    recordOps t = try (fieldAccess t) <|> fieldRemove t <|> 
+      try (recordMod t) <|> recordExt t <|> return t
     
     fieldAccess t = do
       l <- char '.' *> label
