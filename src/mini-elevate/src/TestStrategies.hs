@@ -125,8 +125,8 @@ let contains x p = topDown (isEqualTo x) p in
 
 let etaReduction = 
   lam x = match x with <
-    Lam {Param: Nat | Body: App {Fun: f | Arg: Var {Name: Nat}} | Arg: x1} => match x1 with <
-      Var {Name: Nat} => 
+    Lam {Param: Nat | Body: App {Fun: f | Arg: Var {Name: name}} | Arg: x1} => match x1 with <
+      name => 
         let cond = contains x1 f in
         match cond with <
           False => Success f
