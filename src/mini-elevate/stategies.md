@@ -28,7 +28,7 @@
 | `isEqualTo` | https://github.com/elevate-lang/elevate/blob/master/src/main/scala/elevate/core/strategies/predicate.scala#L36 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L115 | |
 |----------|-----------|-------------|-------|
 | `addId` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L120 | 
-https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L145| |
+https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L145 | |
 | `transposeMove` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/movement.scala#L50 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L147 | |
 | `idToTranspose` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L132 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L154 | |
 | `splitJoin` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L29 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L161 | |
