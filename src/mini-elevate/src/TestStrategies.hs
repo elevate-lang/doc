@@ -104,8 +104,6 @@ let allBottomup s p = (seq (all (allBottomup s)) s) p in
   
 let tryAll s p = (seq (all (tryAll (try s))) s) p in
 
-let addId = lam e = Success (App {Fun: Primitive Id | Arg: e}) in
-
 let normalize s = repeat (topDown s) in
 
 let not s e =
@@ -143,6 +141,8 @@ let etaAbstraction f = match f with <
     Success (Lam {Param: 0 | Body: App {Fun: f | Arg: Var {Name: 0}} | Arg: x})
 | _ => Failure etaAbstraction
 > in
+
+let addId = lam e = Success (App {Fun: Primitive Id | Arg: e}) in
 
 let transposeMove =
   lam x = match x with <
