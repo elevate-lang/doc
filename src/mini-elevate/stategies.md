@@ -20,18 +20,19 @@
 | `allBottomUp` | https://github.com/elevate-lang/elevate/blob/master/src/main/scala/elevate/core/strategies/traversal.scala#L54 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L103 | |
 | `tryAll` | https://github.com/elevate-lang/elevate/blob/master/src/main/scala/elevate/core/strategies/traversal.scala#L50 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L105 | |
 |----------|-----------|-------------|-------|
-| `normalize` | https://github.com/elevate-lang/elevate/blob/master/src/main/scala/elevate/core/strategies/basic.scala#L55 | | |
-| `etaReduction` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/package.scala#L42 | | |
-| `etaAbstraction` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/package.scala#L47 | | |
-| `not` | https://github.com/elevate-lang/elevate/blob/master/src/main/scala/elevate/core/strategies/predicate.scala#L19 | | |
-| `contains` | https://github.com/elevate-lang/elevate/blob/master/src/main/scala/elevate/core/strategies/predicate.scala#L38 | | |
-| `isEqualTo` | https://github.com/elevate-lang/elevate/blob/master/src/main/scala/elevate/core/strategies/predicate.scala#L36 | | |
+| `normalize` | https://github.com/elevate-lang/elevate/blob/master/src/main/scala/elevate/core/strategies/basic.scala#L55 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L107 | |
+| `etaReduction` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/package.scala#L42 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L124 | |
+| `etaAbstraction` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/package.scala#L47 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L138 | |
+| `not` | https://github.com/elevate-lang/elevate/blob/master/src/main/scala/elevate/core/strategies/predicate.scala#L19 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L109 | |
+| `contains` | https://github.com/elevate-lang/elevate/blob/master/src/main/scala/elevate/core/strategies/predicate.scala#L38 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L122 | |
+| `isEqualTo` | https://github.com/elevate-lang/elevate/blob/master/src/main/scala/elevate/core/strategies/predicate.scala#L36 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L115 | |
 |----------|-----------|-------------|-------|
-| `addId` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L120 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L107 | |
-| `transposeMove` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/movement.scala#L50 | https://github.com/elevate-lang/doc/blob/fe90d1f4a11773a8d9d263f3f9a61afa1e13a819/src/mini-elevate/src/TestStrategies.hs#L99 | |
-| `idToTranspose` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L132 | https://github.com/elevate-lang/doc/blob/fe90d1f4a11773a8d9d263f3f9a61afa1e13a819/src/mini-elevate/src/TestStrategies.hs#L111 | |
-| `splitJoin` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L29 | https://github.com/elevate-lang/doc/blob/fe90d1f4a11773a8d9d263f3f9a61afa1e13a819/src/mini-elevate/src/TestStrategies.hs#L122 | |
-| `mapFusion` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L41 | https://github.com/elevate-lang/doc/blob/fe90d1f4a11773a8d9d263f3f9a61afa1e13a819/src/mini-elevate/src/TestStrategies.hs#L133 | |
+| `addId` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L120 | 
+https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L145| |
+| `transposeMove` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/movement.scala#L50 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L147 | |
+| `idToTranspose` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L132 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L154 | |
+| `splitJoin` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L29 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L161 | |
+| `mapFusion` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L41 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L168 | |
 | `mapFission` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L102 | | |
 | `fuseReduceMap` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L76 | | |
 | `fissionReduceMap` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L90 | | | 
