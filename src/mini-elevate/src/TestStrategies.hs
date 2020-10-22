@@ -33,7 +33,6 @@ import Parser
   Algorithmic: https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala
   Movement: https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/movement.scala
   TODO: The DepLambda cases in body are omitted here
-  TODO: in isEqualTo what is == in mini-ELEVATE
 -}
 elevatePrograms :: String
 elevatePrograms = [r|
@@ -76,7 +75,7 @@ let mapSuccess rr f =
   
 let body s e =
   match e with <
-    Lam {Param: Nat | Body: App {Fun: f | Arg: Id {Name: Nat}} | Arg: x} =>
+    Lam {Param: Nat | Body: App {Fun: f | Arg: Var {Name: Nat}} | Arg: x} =>
     Success (mapSuccess (s f) (Lam {Param: _ | Body: _ | Arg: x}))
   | _ => Failure s
   > in
@@ -116,12 +115,34 @@ let not s e =
   > in
 
 let isEqualTo x p =
+  let cond = riseEq p x in
   match cond with <
     True => Success p
   | False => Failure (isEqualTo x)
   > in
 
 let contains x p = topDown (isEqualTo x) p in
+
+let etaReduction = 
+  lam x = match x with <
+    Lam {Param: Nat | Body: App {Fun: f | Arg: Var {Name: Nat}} | Arg: x1} => match x1 with <
+      Var {Name: Nat} => 
+        let cond = contains x1 f in
+        match cond with <
+          False => Success f
+        | True => Failure etaReduction
+        >
+    | _ => Failure etaReduction
+    >
+  | _ => Failure etaReduction
+  > in
+
+let etaAbstraction f = match f with <
+  Fun f =>
+    let x = Var {Name: eta} in
+    Success (Lam {Param: 0 | Body: App {Fun: f | Arg: Var {Name: 0}} | Arg: x})
+| _ => Failure etaAbstraction
+> in
 
 let transposeMove =
   lam x = match x with <
@@ -133,7 +154,7 @@ let transposeMove =
 let idToTranspose =
   lam x = match x with <
     App {Fun: Primitive Id | Arg: arg} =>
-    Success (App {Fun: Lam {Param: 0 | Body: App {Fun: Primitive Transpose | Arg: App {Fun: Primitive Transpose | Arg: Id {Name: 0}}}} | Arg: arg})
+    Success (App {Fun: Lam {Param: 0 | Body: App {Fun: Primitive Transpose | Arg: App {Fun: Primitive Transpose | Arg: Var {Name: 0}}}} | Arg: arg})
   | _ => Failure 1
   > in
 
@@ -147,7 +168,37 @@ let splitJoin =
 let mapFusion = 
   lam x = match x with <
     App {Fun: App {Fun: Primitive Map | Arg: f} | Arg: App {Fun: App {Fun: Primitive Map | Arg: g} | Arg: x}} => 
-    Success (App {Fun: App {Fun: Primitive Map | Arg: Lam {Param: 0 | Body: App {Fun: f | Arg: App {Fun: g | Arg: Id {Name: 0}}}}} | Arg: x})
+    Success (App {Fun: App {Fun: Primitive Map | Arg: Lam {Param: 0 | Body: App {Fun: f | Arg: App {Fun: g | Arg: Var {Name: 0}}}}} | Arg: x})
+  | _ => Failure 1
+  > in
+
+let mapFission = 
+  lam x = match x with <
+    App {Fun: Primitive Map | Arg: Lam {Param: Nat | Body: App {Fun: f | Arg: App {Fun: g | Arg : Var {Name: Nat}}} | Arg: x}} =>
+    let cond1 = contains x f in
+    match cond1 with <
+      False => 
+        let cond2 = isIdentifier (App {Fun: g | Arg: x}) in
+        match cond2 with <
+          False => App {Fun: App {Fun: Primitive Map | Arg: f} | Arg: App {Fun: Primitive Map | Arg: Lam {Param: 0 | Body: App {Fun: g | Arg: Var {Name: 0}} | Arg: x}}}
+        | True => Failure 1
+        > 
+    | True => Failure 1
+    >
+  | _ => Failure 1
+  > in
+
+let fuseReduceMap =
+  lam x = match x with <
+    App {Fun: App {Fun: App {Fun: Primitive Reduce | Arg: op}| Arg: init} | Arg: App {Fun: App {Fun: Primitive Map | Arg: f} | Arg: mapArg}} =>
+    Success _
+  | _ => Failure 1
+  > in
+
+let fuseReduceSeqMap =
+  lam x = match x with <
+    App {Fun: App {Fun: App {Fun: Primitive Reduce | Arg: op}| Arg: init} | Arg: App {Fun: App {Fun: Primitive Map | Arg: f} | Arg: mapArg}} =>
+    Success _
   | _ => Failure 1
   > in _
 |]
