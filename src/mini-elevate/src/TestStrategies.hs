@@ -158,7 +158,7 @@ let idToTranspose =
   | _ => Failure 1
   > in
 
-let splitJoin = 
+let splitJoin n = 
   lam x = match x with <
     App {Fun: Primitive Map | Arg: f} => 
     Success (App {Fun: Primitive Join | Arg: App {Fun: App {Fun: Primitive Map | Arg: App {Fun: Primitive Map | Arg: f}} | Arg: Primitive (Split n)}})

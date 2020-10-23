@@ -48,7 +48,7 @@ spaced1 :: (Monad m) => Parser m u a -> Parser m u a
 spaced1 p = many1 space *> p <* many1 space
 
 keywords :: Set.Set Id
-keywords = Set.fromList (map strId ["type", "let", "fun", "in", "match", "with", "forall", "lam"])
+keywords = Set.fromList (map strId ["type", "let", "in", "match", "with", "forall", "lam"])
 
 initUpperId :: (Monad m) => Parser m u Id
 initUpperId = do
@@ -200,7 +200,7 @@ funDefSimp = do
 
 funDefCompTop :: (Monad m) => Parser m u (Fix ExprSig EXPR)
 funDefCompTop = do
-  name <- try (string "fun" *> many1 space) *> termId <* many space
+  name <- try (string "let" *> many1 space) *> termId <* many space
   isCons <- char ':' *> option False (True <$ char '!') <* many space
   (tv, rv) <- option ([], []) (try forall)
   (ps, pts) <- unzip <$> many (parens ((,) <$> termId <* spaced (char ':') <*> type_) <* spaced (string "->"))
@@ -212,7 +212,7 @@ funDefCompTop = do
 
 funDefSimpTop :: (Monad m) => Parser m u (Fix ExprSig EXPR)
 funDefSimpTop = do
-  name <- try (string "fun" *> many1 space) *> termId <* many space
+  name <- try (string "let" *> many1 space) *> termId <* many space
   ps <- many (spaced termId)
   spaced (char '=')
   body <- term
@@ -236,7 +236,7 @@ match = iMatch <$>
   angles (((,) <$> pattern <* spaced (string "=>") <*> term) `sepBy` (try $ spaced (char '|')))
 
 term :: (Monad m) => Parser m u (Fix ExprSig EXPR)
-term = typeDef <|> funDefTop <|> funDef <|> lamDef <|> match <|> appTerm
+term = typeDef <|> try funDef <|> funDefTop <|> lamDef <|> match <|> appTerm
 
 program :: (Monad m) => Parser m u (Fix ExprSig EXPR)
 program = spaced term <* eof

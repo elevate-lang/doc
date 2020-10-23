@@ -26,6 +26,7 @@ import Data.Functor.Compose
 import Data.Functor.Identity
 import Text.RawString.QQ
 import qualified Control.Monad.Fail as Fail
+import System.IO
 
 type ParsedSig = ExprSig
 
@@ -61,7 +62,7 @@ run s = do
       env <- get
       let cxt :: HList '["NameCounter" :- IORef Int, "TypeEnv" :- TypeEnv]
           cxt = Field nameCounter :| Field env :| HNil
-      ((r, cs), newEnv) <- liftIO $ (flip runStateT (TypeEnv Map.empty) (runWriterT (flip runReaderT cxt (getCompose (cata inferAlg elab)))) :: IO ((Fix InferSig EXPR, [Constraint]), TypeEnv))
+      ((r, cs), newEnv) <- liftIO $ (flip runStateT env (runWriterT (flip runReaderT cxt (getCompose (cata inferAlg elab)))) :: IO ((Fix InferSig EXPR, [Constraint]), TypeEnv))
       flip runReaderT cxt (runSolver cs)
       typeStr <- showTypeRep True (getType r)
       liftIO $ putStrLn ("type: " ++ typeStr ++ "\n")
@@ -74,8 +75,7 @@ readProg = do
 
 repl :: (MonadState TypeEnv m, MonadIO m, Fail.MonadFail m) => m ()
 repl = do
-  liftIO $ putStr "> "
-  prog <- liftIO $ readProg
+  prog <- liftIO $ putStr "> " >> hFlush stdout >> readProg
   if prog == ":q\n" then return () else run prog >> repl
 
 runREPL :: IO ()
@@ -129,7 +129,12 @@ let rise x = match x with <
   Id x => Id x.{Name: x.Name} |
   Lam x => Lam x.{Param: x.Param | Body: rise x.Body} |
   App x => App x.{Fun: rise x.Fun | Arg: rise x.Arg} |
-  Primitive x => Primitive (match x with < Map => Map | Zip => Zip | _ => x >)
+  Primitive x => Primitive (match x with < Map => Map | Zip => Zip | _ => x >) |
+  DepLam x => match x.Kind with <
+    Nat => DepLam x.{Param: x.Param | Body: rise x.Body} |
+    Data => DepLam x.{Param: x.Param | Body: rise x.Body} |
+    _ => DepLam x.{Param: x.Param | Body: rise x.Body}
+  >
 > in
 
 {
