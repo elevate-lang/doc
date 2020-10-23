@@ -25,6 +25,7 @@ import HList as HL
 import Data.Functor.Compose
 import Data.Functor.Identity
 import Text.RawString.QQ
+import qualified Control.Monad.Fail as Fail
 
 type ParsedSig = ExprSig
 
@@ -38,11 +39,11 @@ type ElabSig = Expr :+: FunDef PresSig TypeSig :+: RecDef PresSig TypeSig :+: Re
 
 type InferSig = (Expr :&: TypeRep) :+: (FunDef PresSig TypeSig :&: TypeRep) :+: (RecDef PresSig TypeSig :&: TypeRep) :+: (RecordOps :&: TypeRep) :+: (LabelExpr LabelAsFun :&: TypeRep) :+: (Match (Pat :+: AppPat) SimplePat :&: TypeRep) :+: (RHS MatchId :&: TypeRep)
 
-run :: String -> IO ()
+run :: (MonadState TypeEnv m, MonadIO m, Fail.MonadFail m) => String -> m ()
 run s = do
-  nameCounter <- newIORef 0
+  nameCounter <- liftIO $ newIORef 0
   case parse program "" s of
-    Left err -> print err
+    Left err -> liftIO $ print err
     Right p -> do
       let genRec :: Fix GenRecSig EXPR
           genRec = flip evalState (Set.empty) (getCompose (cata genRecDefAlg p))
@@ -54,14 +55,31 @@ run s = do
           rCxt = Field nameCounter :| HNil
           sCxt :: HList '["MatchCounter" :- Int, "RHSOccur" :- Map.Map MatchId Int]
           sCxt = Field 0 :| Field Map.empty :| HNil
-      elab <- flip evalStateT sCxt $ flip runReaderT rCxt $ 
-              getCompose (cata patElabAlg typeDefSubst) :: IO (Fix ElabSig EXPR)
+      elab <- liftIO $ (flip evalStateT sCxt $ flip runReaderT rCxt $ 
+              getCompose (cata patElabAlg typeDefSubst) :: IO (Fix ElabSig EXPR))
       -- print elab
+      env <- get
       let cxt :: HList '["NameCounter" :- IORef Int, "TypeEnv" :- TypeEnv]
-          cxt = Field nameCounter :| Field (TypeEnv Map.empty) :| HNil
-      (r, cs) <- runWriterT (flip runReaderT cxt (getCompose (cata inferAlg elab))) :: IO (Fix InferSig EXPR, [Constraint])
+          cxt = Field nameCounter :| Field env :| HNil
+      ((r, cs), newEnv) <- liftIO $ (flip runStateT (TypeEnv Map.empty) (runWriterT (flip runReaderT cxt (getCompose (cata inferAlg elab)))) :: IO ((Fix InferSig EXPR, [Constraint]), TypeEnv))
       flip runReaderT cxt (runSolver cs)
-      putStrLn =<< showTypeRep True (getType r)
+      typeStr <- showTypeRep True (getType r)
+      liftIO $ putStrLn ("type: " ++ typeStr ++ "\n")
+      put newEnv
+
+readProg :: IO String
+readProg = do
+  s <- getLine
+  if s == "" then return "" else ((s ++ "\n") ++) <$> readProg
+
+repl :: (MonadState TypeEnv m, MonadIO m, Fail.MonadFail m) => m ()
+repl = do
+  liftIO $ putStr "> "
+  prog <- liftIO $ readProg
+  if prog == ":q\n" then return () else run prog >> repl
+
+runREPL :: IO ()
+runREPL = flip evalStateT (TypeEnv Map.empty) repl
 
 elevate :: String
 elevate = [r|

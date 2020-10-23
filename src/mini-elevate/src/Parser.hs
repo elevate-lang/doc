@@ -48,7 +48,7 @@ spaced1 :: (Monad m) => Parser m u a -> Parser m u a
 spaced1 p = many1 space *> p <* many1 space
 
 keywords :: Set.Set Id
-keywords = Set.fromList (map strId ["type", "let", "in", "match", "with", "forall", "lam"])
+keywords = Set.fromList (map strId ["type", "let", "fun", "in", "match", "with", "forall", "lam"])
 
 initUpperId :: (Monad m) => Parser m u Id
 initUpperId = do
@@ -198,6 +198,31 @@ funDefSimp = do
       f = List.foldr iLamExpr body ps
   return $ iFunDef name False t f e
 
+funDefCompTop :: (Monad m) => Parser m u (Fix ExprSig EXPR)
+funDefCompTop = do
+  name <- try (string "fun" *> many1 space) *> termId <* many space
+  isCons <- char ':' *> option False (True <$ char '!') <* many space
+  (tv, rv) <- option ([], []) (try forall)
+  (ps, pts) <- unzip <$> many (parens ((,) <$> termId <* spaced (char ':') <*> type_) <* spaced (string "->"))
+  rt <- (type_ <* spaced (char '='))
+  body <- term
+  let t = (tv, rv, List.foldr iFunType rt pts)
+      f = List.foldr iLamExpr body ps
+  return $ iFunDef name isCons t f (iIdExpr name)
+
+funDefSimpTop :: (Monad m) => Parser m u (Fix ExprSig EXPR)
+funDefSimpTop = do
+  name <- try (string "fun" *> many1 space) *> termId <* many space
+  ps <- many (spaced termId)
+  spaced (char '=')
+  body <- term
+  let t = ([], [] :: [(Id, Fix PresSig PRES)], iUnknownType :: Fix TypeSig TypeKind)
+      f = List.foldr iLamExpr body ps
+  return $ iFunDef name False t f (iIdExpr name)
+
+funDefTop :: (Monad m) => Parser m u (Fix ExprSig EXPR)
+funDefTop = try funDefCompTop <|> funDefSimpTop
+
 funDef :: (Monad m) => Parser m u (Fix ExprSig EXPR)
 funDef = try funDefComp <|> funDefSimp
 
@@ -211,7 +236,7 @@ match = iMatch <$>
   angles (((,) <$> pattern <* spaced (string "=>") <*> term) `sepBy` (try $ spaced (char '|')))
 
 term :: (Monad m) => Parser m u (Fix ExprSig EXPR)
-term = typeDef <|> funDef <|> lamDef <|> match <|> appTerm
+term = typeDef <|> funDefTop <|> funDef <|> lamDef <|> match <|> appTerm
 
 program :: (Monad m) => Parser m u (Fix ExprSig EXPR)
 program = spaced term <* eof

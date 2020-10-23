@@ -190,7 +190,8 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
 instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m, 
   Occurs ("NameCounter" :- IORef Int) ts HList,
   Update ("TypeEnv" :- TypeEnv) ts HList,
-  MonadReader (HList ts) m, FunDef p t :<: g, DistAnn g TypeRep h) => 
+  MonadReader (HList ts) m, FunDef p t :<: g, DistAnn g TypeRep h,
+  MonadState TypeEnv m) => 
   Infer (FunDef p t) h m where
 
   inferAlg (FunDef name c t f e) = Compose $ do
@@ -202,12 +203,15 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
     let intro = Map.singleton name funScheme
     e' <- local (HList.modify @"TypeEnv" @TypeEnv (extendTypeEnv intro)) (getCompose e)
     let eType = getType e'
+    originalEnv <- HList.select @"TypeEnv" @TypeEnv <$> ask
+    put (extendTypeEnv intro originalEnv)
     return $ iAFunDef eType name c t f' e'
 
 instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m, 
   Occurs ("NameCounter" :- IORef Int) ts HList,
   Update ("TypeEnv" :- TypeEnv) ts HList,
-  MonadReader (HList ts) m, RecDef p t :<: g, DistAnn g TypeRep h) => 
+  MonadReader (HList ts) m, RecDef p t :<: g, DistAnn g TypeRep h,
+  MonadState TypeEnv m) => 
   Infer (RecDef p t) h m where
 
   inferAlg (RecDef name c t f e) = Compose $ do
@@ -223,6 +227,8 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
     let intro = Map.singleton name funScheme
     e' <- local (HList.modify @"TypeEnv" @TypeEnv (extendTypeEnv intro)) (getCompose e)
     let eType = getType e'
+    originalEnv <- HList.select @"TypeEnv" @TypeEnv <$> ask
+    put (extendTypeEnv intro originalEnv)
     return $ iARecDef eType name c t f' e'
 
 instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m, 
@@ -506,7 +512,7 @@ testExpr4 =
         s = strId "s"
         ss = strId "ss"
         fs = strId "fs"
-
+{-
 testInfer :: Fix TestSig EXPR -> IO ()
 testInfer prog = do
   c <- newIORef 0
@@ -518,3 +524,4 @@ testInfer prog = do
       let finalType = getType r
       putStrLn =<< showTypeRep False finalType
     Left m -> undefined
+-}
