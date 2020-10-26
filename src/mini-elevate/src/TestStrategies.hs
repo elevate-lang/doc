@@ -72,26 +72,26 @@ let mapSuccess rr f =
     Success a => Success (f a)
   | Failure b => Failure b
   > in
-  
+
 let body s e =
   match e with <
-    Lam {Param: Nat | Body: App {Fun: f | Arg: Var {Name: Nat}} | Arg: x} =>
-    Success (mapSuccess (s f) (Lam {Param: _ | Body: _ | Arg: x}))
-  | _ => Failure s
+    Lam {Param: x | Body: f} =>
+    Success (mapSuccess (s f) (lam g = Lam {Param: x | Body: g}))
+  | _ => Failure 1
   > in
 
 let function s e =
   match e with <
     App {Fun: f | Arg: x} =>
-    Success (mapSuccess (s f) (App {Fun: f | Arg: _}))
-  | _ => Failure s
+    Success (mapSuccess (s f) (lam g = App {Fun: g | Arg: x}))
+  | _ => Failure 1
   > in
 
 let argument s e =
   match e with <
     App {Fun: f | Arg: x} =>
-    Success (mapSuccess (s f) (App {Fun: f | Arg: _}))
-  | _ => Failure s
+    Success (mapSuccess (s x) (lam y = App {Fun: f | Arg: y}))
+  | _ => Failure 1
   > in
 
 let topDown s p = (lChoice s (one (topDown s))) p in
@@ -123,24 +123,24 @@ let contains x p = topDown (isEqualTo x) p in
 
 let etaReduction = 
   lam x = match x with <
-    Lam {Param: Nat | Body: App {Fun: f | Arg: Var {Name: name}} | Arg: x1} => match x1 with <
+    Lam {Param: x1 | Body: App {Fun: f | Arg: Var {Name: name}}} => match x1 with <
       name => 
         let cond = contains x1 f in
         match cond with <
           False => Success f
-        | True => Failure etaReduction
+        | True => Failure 1
         >
-    | _ => Failure etaReduction
+    | _ => Failure 1
     >
-  | _ => Failure etaReduction
+  | _ => Failure 1
   > in
 
 let etaAbstraction f = match f with <
   Fun f =>
     let x = Var {Name: eta} in
-    Success (Lam {Param: 0 | Body: App {Fun: f | Arg: Var {Name: 0}} | Arg: x})
-| _ => Failure etaAbstraction
-> in
+    Success (Lam {Param: x | Body: App {Fun: f | Arg: x}})
+  | _ => Failure 1
+  > in
 
 let addId = lam e = Success (App {Fun: Primitive Id | Arg: e}) in
 
@@ -161,7 +161,7 @@ let idToTranspose =
 let splitJoin n = 
   lam x = match x with <
     App {Fun: Primitive Map | Arg: f} => 
-    Success (App {Fun: Primitive Join | Arg: App {Fun: App {Fun: Primitive Map | Arg: App {Fun: Primitive Map | Arg: f}} | Arg: Primitive (Split n)}})
+    Success (App {Fun: Primitive Join | Arg: App {Fun: App {Fun: Primitive Map | Arg: App {Fun: Primitive Map | Arg: f}} | Arg: App {Fun: Primitive Split | Arg: n}}})
   | _ => Failure 1
   > in
 
@@ -172,15 +172,21 @@ let mapFusion =
   | _ => Failure 1
   > in
 
+let isIdentifier x = 
+  match x with <
+    Var {Name: name} => Success True
+  | _ => Failure False
+  > in
+
 let mapFission = 
   lam x = match x with <
-    App {Fun: Primitive Map | Arg: Lam {Param: Nat | Body: App {Fun: f | Arg: App {Fun: g | Arg : Var {Name: Nat}}} | Arg: x}} =>
+    App {Fun: Primitive Map | Arg: Lam {Param: x | Body: App {Fun: f | Arg: gx}}} =>
     let cond1 = contains x f in
     match cond1 with <
       False => 
-        let cond2 = isIdentifier (App {Fun: g | Arg: x}) in
+        let cond2 = isIdentifier gx in
         match cond2 with <
-          False => App {Fun: App {Fun: Primitive Map | Arg: f} | Arg: App {Fun: Primitive Map | Arg: Lam {Param: 0 | Body: App {Fun: g | Arg: Var {Name: 0}} | Arg: x}}}
+          False => App {Fun: App {Fun: Primitive Map | Arg: f} | Arg: App {Fun: Primitive Map | Arg: Lam {Param: x | Body: gx}}}
         | True => Failure 1
         > 
     | True => Failure 1
@@ -191,14 +197,36 @@ let mapFission =
 let fuseReduceMap =
   lam x = match x with <
     App {Fun: App {Fun: App {Fun: Primitive Reduce | Arg: op}| Arg: init} | Arg: App {Fun: App {Fun: Primitive Map | Arg: f} | Arg: mapArg}} =>
-    Success _
+    Success (App {Fun: App {Fun: Primitive Reduce | Arg: Lam {Param: acc | Body: Lam {Param: y | Body: App {Fun: App {Fun: op | Arg: acc} | Arg: App {Fun: f | Arg: y}}}}} | Arg: mapArg})
   | _ => Failure 1
   > in
 
 let fuseReduceSeqMap =
   lam x = match x with <
-    App {Fun: App {Fun: App {Fun: Primitive Reduce | Arg: op}| Arg: init} | Arg: App {Fun: App {Fun: Primitive Map | Arg: f} | Arg: mapArg}} =>
-    Success _
+    App {Fun: App {Fun: App {Fun: Primitive ReduceSeq | Arg: op}| Arg: init} | Arg: App {Fun: App {Fun: Primitive Map | Arg: f} | Arg: mapArg}} =>
+    Success (App {Fun: App {Fun: Primitive ReduceSeq | Arg: Lam {Param: acc | Body: Lam {Param: y | Body: App {Fun: App {Fun: op | Arg: acc} | Arg: App {Fun: f | Arg: y}}}}} | Arg: mapArg})
+  | _ => Failure 1
+  > in 
+  
+let reduceMapFission =
+  lam f = match f with <
+  App {Fun: g | Arg: y2} => 
+    lam x = match x with <
+      App {Fun: App {Fun: Primitive Reduce | Arg: Lam {Param: y | Body: App {Fun: App {Fun: op | Arg: acc2} | Arg: f}}} | Arg: init} =>
+      match acc with <
+        acc2 => 
+        let cond = contains y y2 in
+        match cond with <
+          True => Success (App {Fun: App {Fun: App {Fun: Primitive Reduce | Arg: op} | Arg: init} | Arg: App {Fun: Primitive Map | Arg: Lam {Param: y | Body: f}}})
+        | False => Failure 1
+        >
+      | _ => Failure 1
+      >
+    | _ => Failure 1
+    >
   | _ => Failure 1
   > in _
 |]
+
+-- (reduce(op)(init) o map(lambda(ToBeTyped[Identifier](y), preserveType(f))))
+-- app ()
