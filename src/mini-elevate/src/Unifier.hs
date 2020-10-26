@@ -65,7 +65,7 @@ unify m n = do
           Type -> liftIO $ writeIORef da (dav {isType = True})
           _ -> liftIO $ writeIORef da (dav {isType = False})
         return k
-      _ -> Fail.fail "kind check fails"
+      -- _ -> Fail.fail "kind check fails"
   else do
     da <- liftIO $ UF.find a
     db <- liftIO $ UF.find b

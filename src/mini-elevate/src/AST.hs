@@ -386,14 +386,11 @@ instance EqHF (LabelExpr a_a2zX) where
   eqHF (LabelLit x_aakr) (LabelLit y_aaks) = and [(x_aakr == y_aaks)]
   eqHF (LabelApp x_aakt x_aaku) (LabelApp y_aakv y_aakw)
     = and [(x_aakt == y_aakv), (x_aaku `keq` y_aakw)]
-  eqHF _ _ = False
 
 instance OrdHF (LabelExpr a_a2zX) where
   compareHF (LabelLit x_aakz) (LabelLit y_aakA)
     = compList
         [(compare x_aakz) y_aakA]
-  compareHF LabelLit {} LabelApp {} = LT
-  compareHF LabelApp {} LabelLit {} = GT
   compareHF (LabelApp x_aakB x_aakC) (LabelApp y_aakD y_aakE)
     = compList
         [(compare x_aakB) y_aakD, (kcompare x_aakC) y_aakE]
