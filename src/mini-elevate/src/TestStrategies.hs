@@ -227,6 +227,3 @@ let reduceMapFission =
   | _ => Failure 1
   > in _
 |]
-
--- (reduce(op)(init) o map(lambda(ToBeTyped[Identifier](y), preserveType(f))))
--- app ()
