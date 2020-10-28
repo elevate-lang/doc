@@ -43,7 +43,7 @@ let id =
   lam x = Success x in
 
 let fail = 
-  lam x = Failure fail in
+  lam x = Failure 1 in
 
 let flatMapSuccess rr f = 
   match rr with <
@@ -116,7 +116,7 @@ let isEqualTo x p =
   let cond = riseEq p x in
   match cond with <
     True => Success p
-  | False => Failure (isEqualTo x)
+  | False => Failure 1
   > in
 
 let contains x p = topDown (isEqualTo x) p in
