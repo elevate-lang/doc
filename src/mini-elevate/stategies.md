@@ -32,6 +32,6 @@
 | `idToTranspose` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L132 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L154 | |
 | `splitJoin` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L29 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L161 | |
 | `mapFusion` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L41 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L168 | |
-| `mapFission` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L102 | | |
-| `fuseReduceMap` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L76 | | |
-| `fissionReduceMap` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L90 | | | 
+| `mapFission` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L102 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L181 | |
+| `fuseReduceMap` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L76 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L197 | |
+| `fissionReduceMap` | https://github.com/rise-lang/shine/blob/master/src/main/scala/rise/elevate/rules/algorithmic.scala#L90 | https://github.com/elevate-lang/doc/blob/master/src/mini-elevate/src/TestStrategies.hs#L211 | | 
