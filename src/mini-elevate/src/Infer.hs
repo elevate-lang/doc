@@ -159,7 +159,7 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
   inferAlg (IdExpr x) = Compose $ do
     TypeEnv env <- select @"TypeEnv" @TypeEnv <$> ask
     case Map.lookup x env of
-      Nothing -> Fail.fail "variable not found"
+      Nothing -> Fail.fail ("variable " ++ getName x ++ " not found")
       Just scheme -> do
         t <- instantiate scheme
         return $ iAIdExpr t x

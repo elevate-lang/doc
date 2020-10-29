@@ -716,13 +716,14 @@ instance {-# OVERLAPPABLE #-} (MonadIO m, Occurs ("NameCounter" :- IORef Int) ts
   Expr :<: g, ContainFV g, LabelExpr LabelAsFun :<: g, RecordOps :<: g) => 
   PatElab (Match ComplexPatSig ComplexPat) g m where
   patElabAlg (Match e cs) = Compose $ do
+    matchCounter <- HL.select @"MatchCounter" @Int <$> MS.get
+    MS.modify (HL.modify @"MatchCounter" @Int (+ 1))
     freshId <- genFreshId "#x"
     let placeholder = IAccess freshId
     nameCounter <- HL.select @"NameCounter" @(IORef Int) <$> ask
     let eachCase rhsCounter (p, rhs) = do
           cataM pvAlg p
           rhs' <- getCompose rhs
-          matchCounter <- HL.select @"MatchCounter" @Int <$> MS.get
           let rhsId = [matchCounter, rhsCounter]
               cxt :: HList '["NameCounter" :- IORef Int, "RHSId" :- MatchId, "MatchId" :- MatchId,
                              "LabelSet" :- Set.Set Label, "Var" :- Id, "RHSTerm" :- Fix g EXPR]
@@ -743,10 +744,13 @@ instance {-# OVERLAPPABLE #-} (MonadIO m, Occurs ("NameCounter" :- IORef Int) ts
     rhsOccur <- HL.select @"RHSOccur" @(Map.Map MatchId Int) <$> get
     if Map.filter (== 0) rhsOccur /= Map.empty then Fail.fail "unused RHS"
     else do
-      MS.modify (HL.modify @"MatchCounter" @Int (+ 1))
       e' <- getCompose e
+      let er = case unTerm cs' of
+            MatchChainTree (IRAccess _) _ :&: _ -> iRecordMod e' []
+            MatchChainTree (IFRAccess _ _) _ :&: _ -> iRecordMod e' []
+            _ -> e'
       case project (matchChainToExpr cs') :: Maybe (Match SimplePatSig SimplePat (Fix g) EXPR) of
-       Just (Match _ cs') -> return $ iMatch e' cs'
+       Just (Match _ cs') -> return $ iMatch er cs'
        Nothing -> Fail.fail "impossible"
 
 {-
@@ -770,4 +774,25 @@ matchString3 =[r|match x with <
     Success a => f a
   | Failure b => Failure b
 >|]
+
+let f = 
+lam x = 
+match x with <#a1 => 
+  match #a1.A with <T => 
+    match #a1.B with <T => [0,0] 1 {} | 
+                      #x5 => [0,1] match #a1 with <#a3 => 
+                        match #a3.A with <T => 
+                          match #a3.B with <T => [1,0] 2 {}
+                          >
+                        >
+                      >
+    > | 
+                    #x4 => [0,1] match #a1 with <#a3 => 
+                                              match #a3.A with <T => 
+                                                match #a3.B with <T => [1,0] 2 {}
+                                                >
+                                              >
+                                            >
+  >
+>
 -}

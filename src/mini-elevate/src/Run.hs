@@ -27,6 +27,7 @@ import Data.Functor.Identity
 import Text.RawString.QQ
 import qualified Control.Monad.Fail as Fail
 import System.IO
+import Print
 
 type ParsedSig = ExprSig
 
@@ -58,7 +59,7 @@ run s = do
           sCxt = Field 0 :| Field Map.empty :| HNil
       elab <- liftIO $ (flip evalStateT sCxt $ flip runReaderT rCxt $ 
               getCompose (cata patElabAlg typeDefSubst) :: IO (Fix ElabSig EXPR))
-      -- print elab
+      (liftIO . putStrLn) =<< flip evalStateT Nothing (unK $ cata printAlg elab)
       env <- get
       let cxt :: HList '["NameCounter" :- IORef Int, "TypeEnv" :- TypeEnv]
           cxt = Field nameCounter :| Field env :| HNil

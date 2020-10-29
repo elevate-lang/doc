@@ -185,7 +185,7 @@ showTypeRep isConcise t = do
       case kind of
         RowPres p | L.null p -> return (show tid)
         Type -> return (show tid)
-        _ | isHidden -> return "/"
+        _ | isHidden -> return ""
         _ -> return (show tid)
     showTypeRep' (NonRec (FunTypeRep arg ret)) = do
       pos <- get
