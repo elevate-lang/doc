@@ -32,6 +32,9 @@ import Control.Monad.Trans.Except
 import TypeRep
 import Unifier
 import HList as HList
+import Control.Monad.Trans.Maybe
+
+import PatternElaboration (MatchId)
 
 class Infer f g m where
   inferAlg :: Alg f (Compose m (Fix g))
@@ -126,6 +129,48 @@ generalize t = do
   tv <- Set.difference <$> ftv t <*> ftv env
   return (Forall tv t)
 
+copyType :: (MonadIO m, Fail.MonadFail m) => TypeRep -> m TypeRep
+copyType t = do
+  let cxt :: HList '["RecTypes" :- Map.Map Int TypeRep]
+      cxt = Field Map.empty :| HNil
+  join $ (flip evalStateT Map.empty . flip runReaderT cxt) <$> traverseTypeRep (const copy) t
+  where
+    copy :: (Fail.MonadFail m,
+      Update ("RecTypes" :- Map.Map Int TypeRep) ts HList,
+      MonadReader (HList ts) m,
+      MonadState (Map.Map TIdRep TypeRep) m, MonadIO m) => 
+      VisitTypeRep (m TypeRep) -> m TypeRep
+    copy (RecBody n) = do
+      node <- (Map.lookup n . select @"RecTypes" @(Map.Map Int TypeRep)) <$> ask
+      case node of
+        Just node -> return node
+        Nothing -> Fail.fail "impossible"
+    copy (NonRec (IdTypeRep i)) = do
+      copied <- get
+      case Map.lookup i copied of
+        Just node -> return node
+        Nothing -> do
+          node <- typeRep (IdTypeRep i)
+          State.modify (Map.insert i node)
+          return node
+    copy (NonRec (FunTypeRep arg ret)) = do
+      dt <- FunTypeRep <$> arg <*> ret
+      typeRep dt
+    copy (NonRec (RowRep ls r)) = do
+      dt <- RowRep <$> sequence ls <*> r
+      typeRep dt
+    copy (NonRec (VariantRep r)) = do
+      dt <- VariantRep <$> r
+      typeRep dt
+    copy (NonRec (RecordRep r)) = do
+      dt <- RecordRep <$> r
+      typeRep dt
+    copy (RecHead n t) = do
+      ph <- typeRep (IdTypeRep (tIdRep (strId "#rec#") Type))
+      result <- local (HList.modify @"RecTypes" @(Map.Map Int TypeRep) (Map.insert n ph)) (copy (NonRec t))
+      liftIO $ UF.union ph result
+      return result
+
 type InferPresSig = Pres
 
 type InferTypeSig = Type :+: Row :+: UnknownType :+: RecVariantType
@@ -148,15 +193,26 @@ getType e = let (_ O.:&: t) = projectA (unTerm e) in t
 runSolver :: (MonadIO m, Fail.MonadFail m,
   Occurs ("NameCounter" :- IORef Int) ts HList, MonadReader (HList ts) m) => [Constraint] -> m ()
 runSolver cs = do
-  -- liftIO $ print =<< mapM (\c -> (,) <$> showTypeRep (fst c) <*> showTypeRep (snd c)) cs
+  -- liftIO $ print =<< mapM (\c -> (,) <$> showTypeRep False (fst c) <*> showTypeRep False (snd c)) cs
   mapM_ (uncurry unify) cs
+
+packInfer :: (Occurs (Field "RunInfer" Bool) ts HList, 
+  MonadReader (HList ts) f1, MonadIO f1, 
+  DistAnn s TypeRep f2, f3 :<: s, 
+  HTraversable f3) => f3 (Compose f1 (Cxt h f2 a1)) a2 -> f1 (Cxt h f2 a1 a2) -> Compose f1 (Cxt h f2 a1) a2
+packInfer x m = Compose $ do
+  run <- select @"RunInfer" @Bool <$> ask
+  if run then m else do
+    t <- typeRep (IdTypeRep (tIdRep (strId "") Type))
+    fmap (Term . injectA t . inj) (hmapM getCompose x)
 
 instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m, 
   Occurs ("NameCounter" :- IORef Int) ts HList,
   Update ("TypeEnv" :- TypeEnv) ts HList,
+  Update (Field "RunInfer" Bool) ts HList,
   MonadReader (HList ts) m, Expr :<: g, DistAnn g TypeRep h) => Infer Expr h m where
 
-  inferAlg (IdExpr x) = Compose $ do
+  inferAlg o@(IdExpr x) = packInfer o $ do
     TypeEnv env <- select @"TypeEnv" @TypeEnv <$> ask
     case Map.lookup x env of
       Nothing -> Fail.fail ("variable " ++ getName x ++ " not found")
@@ -164,7 +220,7 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
         t <- instantiate scheme
         return $ iAIdExpr t x
 
-  inferAlg (AppExpr fun arg) = Compose $ do
+  inferAlg o@(AppExpr fun arg) = packInfer o $ do
     fun' <- getCompose fun
     arg' <- getCompose arg
     let funType = getType fun'
@@ -174,7 +230,7 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
     tell [(funType, funTypeUni)]
     return $ iAAppExpr retType fun' arg'
 
-  inferAlg (LamExpr param body) = Compose $ do
+  inferAlg o@(LamExpr param body) = packInfer o $ do
     paramType <- genFreshIdType Type
     let intro = Map.singleton param (Forall Set.empty paramType)
     body' <- local (HList.modify @"TypeEnv" @TypeEnv (extendTypeEnv intro)) (getCompose body)
@@ -190,11 +246,13 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
 instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m, 
   Occurs ("NameCounter" :- IORef Int) ts HList,
   Update ("TypeEnv" :- TypeEnv) ts HList,
+  Update (Field "RunInfer" Bool) ts HList,
   MonadReader (HList ts) m, FunDef p t :<: g, DistAnn g TypeRep h,
-  MonadState TypeEnv m) => 
+  Update ("REPLEnv" :- TypeEnv) ts' HList,
+  MonadState (HList ts') m) => 
   Infer (FunDef p t) h m where
 
-  inferAlg (FunDef name c t f e) = Compose $ do
+  inferAlg o@(FunDef name c t f e) = packInfer o $ do
     (f', cs) <- listen (getCompose f)
     let funType = getType f'
     runSolver cs
@@ -204,17 +262,19 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
     e' <- local (HList.modify @"TypeEnv" @TypeEnv (extendTypeEnv intro)) (getCompose e)
     let eType = getType e'
     originalEnv <- HList.select @"TypeEnv" @TypeEnv <$> ask
-    put (extendTypeEnv intro originalEnv)
+    State.modify (HList.modify @"REPLEnv" @TypeEnv (const $ extendTypeEnv intro originalEnv))
     return $ iAFunDef eType name c t f' e'
 
 instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m, 
   Occurs ("NameCounter" :- IORef Int) ts HList,
   Update ("TypeEnv" :- TypeEnv) ts HList,
+  Update (Field "RunInfer" Bool) ts HList,
   MonadReader (HList ts) m, RecDef p t :<: g, DistAnn g TypeRep h,
-  MonadState TypeEnv m) => 
+  Update ("REPLEnv" :- TypeEnv) ts' HList,
+  MonadState (HList ts') m) => 
   Infer (RecDef p t) h m where
 
-  inferAlg (RecDef name c t f e) = Compose $ do
+  inferAlg o@(RecDef name c t f e) = packInfer o $ do
     self <- genFreshIdType Type
     let intro = Map.singleton name (Forall Set.empty self)
     (f', cs) <- listen (local (
@@ -228,15 +288,16 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
     e' <- local (HList.modify @"TypeEnv" @TypeEnv (extendTypeEnv intro)) (getCompose e)
     let eType = getType e'
     originalEnv <- HList.select @"TypeEnv" @TypeEnv <$> ask
-    put (extendTypeEnv intro originalEnv)
+    State.modify (HList.modify @"REPLEnv" @TypeEnv (const $ extendTypeEnv intro originalEnv))
     return $ iARecDef eType name c t f' e'
 
 instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m, 
   Occurs ("NameCounter" :- IORef Int) ts HList,
   Update ("TypeEnv" :- TypeEnv) ts HList,
+  Update (Field "RunInfer" Bool) ts HList,
   MonadReader (HList ts) m, LabelExpr LabelAsFun :<: g, DistAnn g TypeRep h) => 
   Infer (LabelExpr LabelAsFun) h m where
-  inferAlg (LabelApp l e) = Compose $ do
+  inferAlg o@(LabelApp l e) = packInfer o $ do
     e' <- getCompose e
     let eType = getType e'
     rv <- genFreshIdType (RowLack (L.singleton l))
@@ -281,8 +342,9 @@ instance (MonadIO m, Fail.MonadFail m,
 instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m, 
   Occurs ("NameCounter" :- IORef Int) ts HList,
   Update ("TypeEnv" :- TypeEnv) ts HList,
+  Update (Field "RunInfer" Bool) ts HList,
   MonadReader (HList ts) m, RecordOps :<: g, DistAnn g TypeRep h) => Infer RecordOps h m where
-  inferAlg (RecordCons fields) = Compose $ do
+  inferAlg o@(RecordCons fields) = packInfer o $ do
     let process (l, e) = do
           e' <- getCompose e
           let eType = getType e'
@@ -293,7 +355,7 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
     t <- typeRep (RecordRep row)
     let fields' = map fst fieldsTypes
     return $ iARecordCons t fields'
-  inferAlg (FieldAccess r l) = Compose $ do
+  inferAlg o@(FieldAccess r l) = packInfer o $ do
     r' <- getCompose r
     let rType = getType r'
     rv <- genFreshIdType (RowLack (L.singleton l))
@@ -302,7 +364,7 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
     rTypeUni <- typeRep (RecordRep row)
     tell [(rType, rTypeUni)]
     return $ iAFieldAccess fieldType r' l
-  inferAlg (FieldRemove r l) = Compose $ do
+  inferAlg o@(FieldRemove r l) = packInfer o $ do
     r' <- getCompose r
     let rType = getType r'
     rv <- genFreshIdType (RowLack (L.singleton l))
@@ -312,7 +374,7 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
     restType <- typeRep (RecordRep rv)
     tell [(rType, rTypeUni)]
     return $ iAFieldRemove restType r' l
-  inferAlg (RecordMod r mod) = Compose $ do
+  inferAlg o@(RecordMod r mod) = packInfer o $ do
     r' <- getCompose r
     let rType = getType r'
     let process (l, e) = do
@@ -326,7 +388,7 @@ instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m,
     let mod' = map fst modTypes
     tell [(rType, modType)]
     return $ iARecordMod rType r' mod'
-  inferAlg (RecordExt r ext) = Compose $ do
+  inferAlg o@(RecordExt r ext) = packInfer o $ do
     r' <- getCompose r
     let rType = getType r'
     let process (l, e) = do
@@ -395,52 +457,120 @@ sizeOf t = traverseTypeRep (const sizeOf') t >>= (return . getSum)
     sizeOf' (NonRec (VariantRep r)) = r
     sizeOf' (NonRec (RecordRep r)) = r
 
+class RemRHS f g m where
+  remRHSAlg :: Alg f (Compose m (Fix g))
+
+$(derive [liftSum] [''RemRHS])
+
+instance {-# OVERLAPPABLE #-} (Monad m, HTraversable f, f :<: g) => RemRHS f g m where
+  remRHSAlg = Compose . fmap inject . hmapM getCompose
+
+instance {-# OVERLAPPABLE #-} (RHS MatchId :<: g, Fail.MonadFail m,
+  Update ("RHSOccur" :- Map.Map MatchId Int) ts' HList,
+  MonadState (HList ts') m) => RemRHS (RHS MatchId) g m where
+  remRHSAlg (RHS i e) = Compose $ do
+    rhs <- HList.select @"RHSOccur" @(Map.Map MatchId Int) <$> get
+    case Map.lookup i rhs of
+      Just count -> if count == 1 then Fail.fail "useless case" else do
+        State.modify (HList.modify @"RHSOccur" @(Map.Map MatchId Int) (Map.insert i (count - 1)))
+        e' <- getCompose e
+        return $ iRHS i e'
+      Nothing -> Fail.fail "impossible"
+
+unify_ :: (MonadReader (HList ts) m, Occurs (Field "NameCounter" (IORef Int)) ts HList, MonadIO m) => 
+  TypeRep -> TypeRep -> m (Maybe KindRep)
+unify_ a b = do
+  counter <- select @"NameCounter" @(IORef Int) <$> ask
+  let cxt :: HList '["NameCounter" :- IORef Int]
+      cxt = Field counter :| HNil
+  liftIO $ runMaybeT $ flip runReaderT cxt $ unify a b
+
 instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m, 
   Occurs ("NameCounter" :- IORef Int) ts HList,
   Update ("TypeEnv" :- TypeEnv) ts HList,
+  Update (Field "RunInfer" Bool) ts HList,
+  Update (Field "ErrMsg" String) ts HList,
   MonadReader (HList ts) m, Match InferPatSig SimplePat :<: g, DistAnn g TypeRep h) => 
   Infer (Match InferPatSig SimplePat) h m where
-  inferAlg (Match e cases) = Compose $ do
+  inferAlg o@(Match e cases) = packInfer o $ do
     emptyRow <- typeRep (IdTypeRep (tIdRep (strId "*") (RowPres L.empty)))
     emptyType <- typeRep (VariantRep emptyRow)
     (e', cs) <- listen (getCompose e)
     runSolver cs
     rhsIdType <- genFreshIdType Type
     let eType = getType e'
-    let process (Nothing, _) _ = Fail.fail "redundant case"
+    let process (Nothing, cases') (_, rhs) = do
+          local ((HList.modify @"RunInfer" @Bool (const False)) .
+                (HList.modify @"ErrMsg" @String (const "redundant cases"))) (getCompose rhs)
+          return (Nothing, cases')
         process (Just t, cases') (p, rhs) = do
           (patType, rest, intro) <- unK (cata patInferAlg p)
           (Forall ftvBefore _) <- generalize t
-          runSolver [(patType, t)]
-          (Forall ftvAfter _) <- generalize t
-          rest' <- case rest of
-            Just r -> do
-              if ftvBefore /= ftvAfter then Fail.fail "impossible pattern"
+          -- runSolver [(patType, t)]
+          t' <- copyType t
+          patType' <- copyType patType
+          ur <- unify_ patType' t'
+          case ur of
+            Nothing -> do
+              -- liftIO $ putStrLn "Caught!!!!"
+              local ((HList.modify @"RunInfer" @Bool (const False)) .
+                (HList.modify @"ErrMsg" @String (const "impossible/overlapped pattern"))) (getCompose rhs)
+              return (Just t, cases')
+            Just _ -> do
+              unify patType t
+              (Forall ftvAfter _) <- generalize t
+              if ftvBefore /= ftvAfter then do
+                local ((HList.modify @"RunInfer" @Bool (const False)) .
+                  (HList.modify @"ErrMsg" @String (const "impossible pattern"))) (getCompose rhs)
+                return (Just t, cases')
               else do
-                free <- isFreeVariant r
-                if free then runSolver [(r, emptyType)] >> return Nothing
-                else return (Just r)
-            Nothing -> return Nothing
-          intro' <- mapM generalize intro
-          rhs' <- local (HList.modify @"TypeEnv" @TypeEnv (extendTypeEnv intro')) (getCompose rhs)
-          let rhsType = getType rhs'
-          tell [(rhsType, rhsIdType)]
-          return (rest', (p, rhs') : cases')
+                rest' <- case rest of
+                  Just r -> do
+                    free <- isFreeVariant r
+                    if free then runSolver [(r, emptyType)] >> return Nothing
+                    else return (Just r)
+                  Nothing -> return Nothing
+                intro' <- mapM generalize intro
+                rhs' <- local (HList.modify @"TypeEnv" @TypeEnv (extendTypeEnv intro')) (getCompose rhs)
+                let rhsType = getType rhs'
+                tell [(rhsType, rhsIdType)]
+                return (rest', (p, rhs') : cases')
     (rest, cases') <- second reverse <$> foldM process (Just eType, []) cases
     case rest of
-      Just t -> tell [(t, emptyType)]
+      Just t -> do
+        t' <- copyType t
+        ur <- unify_ t' emptyType
+        case ur of
+          Nothing -> Fail.fail "Non-exhaustive pattern matching"
+          Just _ -> unify t emptyType >> return ()
       Nothing -> return ()
     return $ iAMatch rhsIdType e' cases'
 
 instance (MonadIO m, Fail.MonadFail m, MonadWriter [Constraint] m, 
   Occurs ("NameCounter" :- IORef Int) ts HList,
   Update ("TypeEnv" :- TypeEnv) ts HList,
-  MonadReader (HList ts) m, RHS i :<: g, DistAnn g TypeRep h) => 
-  Infer (RHS i) h m where
+  Update ("RunInfer" :- Bool) ts HList,
+  Update ("ErrMsg" :- String) ts HList,
+  MonadReader (HList ts) m, RHS MatchId :<: g, DistAnn g TypeRep h,
+  Update ("RHSOccur" :- Map.Map MatchId Int) ts' HList,
+  MonadState (HList ts') m) => 
+  Infer (RHS MatchId) h m where
   inferAlg (RHS i e) = Compose $ do
-    e' <- getCompose e
-    let eType = getType e'
-    return $ iARHS eType i e'
+    run <- select @"RunInfer" @Bool <$> ask
+    if run then do
+      e' <- getCompose e
+      let eType = getType e'
+      return $ iARHS eType i e'
+    else do
+      rhsOccur <- HList.select @"RHSOccur" @(Map.Map MatchId Int) <$> get
+      err <- HList.select @"ErrMsg" @String <$> ask
+      case Map.lookup i rhsOccur of
+        Just count -> if count == 1 then Fail.fail err else do
+          State.modify (HList.modify @"RHSOccur" @(Map.Map MatchId Int) (Map.insert i (count - 1)))
+          e' <- getCompose e
+          let eType = getType e'
+          return $ iARHS eType i e'
+        Nothing -> Fail.fail "impossible"
 
 type TestSig = RecDef InferPresSig InferTypeSig :+: FunDef InferPresSig InferTypeSig :+: Expr :+: Match InferPatSig SimplePat :+: LabelExpr LabelAsFun :+: RecordOps
 

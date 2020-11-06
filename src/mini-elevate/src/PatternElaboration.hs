@@ -40,7 +40,7 @@ import Parser
 import HList as HL
 import Data.IORef
 import Id
-import Label
+import Label as L
 import qualified Control.Monad.Fail as Fail
 import Control.Monad.Trans.Except
 import Util
@@ -49,6 +49,7 @@ import HList as HL
 import Data.IORef
 import Data.List
 import Data.Foldable
+import qualified Data.Map.Ordered.Strict as OMap
 
 type Subst e = Map.Map Id e
 
@@ -698,6 +699,48 @@ matchChainToExpr mc = case unTerm mc of
   MatchChainTree a bs :&: _ -> iMatch (accessToAST a) (map (second matchChainToExpr) bs)
   RHSExpr e :&: m -> iRHS m e
 
+type Matched = OMap.OMap Id (Either (Fix SimplePatSig SimplePat) [(Label, Fix SimplePatSig SimplePat)])
+
+accessLabel :: AccessForm -> Maybe Label
+accessLabel (IAccess _) = Nothing
+accessLabel (IFAccess _ l) = Just l
+accessLabel (IFRAccess _ l) = Just l
+accessLabel (IRAccess _) = Nothing
+
+matchChainRefining :: forall e ts m. (Update ("Subst" :- Subst (Fix e EXPR)) ts HList,
+  Update ("Matched" :- Matched) ts HList,
+  MonadIO m, Occurs ("NameCounter" :- IORef Int) ts HList,
+  MonadReader (HList ts) m, Fail.MonadFail m, HTraversable e, Substitutable e e m, 
+  Expr :<: e, ContainFV e, LabelExpr LabelAsFun :<: e, RecordOps :<: e) =>
+  Fix (TaggedMatchChainSig e SimplePatSig SimplePat) TreeModel ->
+  m (Fix (TaggedMatchChainSig e SimplePatSig SimplePat) TreeModel)
+matchChainRefining mt = case unTerm mt of
+  MatchChainTree mta bs :&: mtid -> do
+    matched <- select @"Matched" @Matched <$> ask
+    let x = accessId mta
+        process (p, rhs) = case accessLabel mta of
+          Just l -> case OMap.lookup x matched of
+            Just r -> case r of
+              Left _ -> Fail.fail "impossible"
+              Right ps -> (p,) <$> local (HL.modify  @"Matched" @Matched (OMap.|> (x, Right ((l, p) : ps)))) 
+                (matchChainRefining rhs)
+            Nothing -> (p,) <$> local (HL.modify  @"Matched" @Matched (OMap.|> (x, Right [(l, p)]))) 
+              (matchChainRefining rhs)
+          Nothing -> (p,) <$> local (HL.modify  @"Matched" @Matched (OMap.|> (x, Left p))) 
+            (matchChainRefining rhs)
+    bs' <- mapM process bs
+    return $ iAMatchChainTree mtid mta bs'
+  RHSExpr e :&: rhsid -> do
+    matched <- select @"Matched" @Matched <$> ask
+    let process acc (x, ps) = do
+          let x' = case ps of
+                Left p -> patToExpr p
+                Right fs -> iRecordExt (foldr (\(l, _) acc -> iFieldRemove acc l) (iIdExpr x) fs) (map (second patToExpr) fs)
+              s = Map.singleton x x' :: Subst (Fix e EXPR)
+          local (HL.modify @"Subst" @(Subst (Fix e EXPR)) (const s)) (getCompose $ cata substAlg acc)
+    e' <- foldM process e (OMap.assocs matched)
+    return $ iARHSExpr rhsid e'
+
 class PatElab f g m where
   patElabAlg :: Alg f (Compose m (Fix g))
 
@@ -712,7 +755,10 @@ instance {-# OVERLAPPABLE #-} (MonadIO m, Occurs ("NameCounter" :- IORef Int) ts
   Update ("RHSOccur" :- Map.Map MatchId Int) ts' HList,
   MonadState (HList ts') m,
   Match SimplePatSig SimplePat :<: g, RHS MatchId :<: g, HTraversable g,
-  Substitutable g g ((ReaderT (HList '["NameCounter" :- IORef Int, "Subst" :- Subst (Fix g EXPR)]) m)), 
+  Substitutable g g (ReaderT (HList 
+    '["NameCounter" :- IORef Int, "Subst" :- Subst (Fix g EXPR)]) m),
+  Substitutable g g (ReaderT (HList 
+    '["NameCounter" :- IORef Int, "Subst" :- Subst (Fix g EXPR), "Matched" :- Matched]) m), 
   Expr :<: g, ContainFV g, LabelExpr LabelAsFun :<: g, RecordOps :<: g) => 
   PatElab (Match ComplexPatSig ComplexPat) g m where
   patElabAlg (Match e cs) = Compose $ do
@@ -744,14 +790,33 @@ instance {-# OVERLAPPABLE #-} (MonadIO m, Occurs ("NameCounter" :- IORef Int) ts
     rhsOccur <- HL.select @"RHSOccur" @(Map.Map MatchId Int) <$> get
     if Map.filter (== 0) rhsOccur /= Map.empty then Fail.fail "unused RHS"
     else do
+      let cxt :: HList '["NameCounter" :- IORef Int, "Subst" :- Subst (Fix g EXPR), "Matched" :- Matched]
+          cxt = Field nameCounter :| Field Map.empty :| Field OMap.empty :| HNil
+      rcs' <- flip runReaderT cxt $ matchChainRefining @g cs'
       e' <- getCompose e
       let er = case unTerm cs' of
             MatchChainTree (IRAccess _) _ :&: _ -> iRecordMod e' []
             MatchChainTree (IFRAccess _ _) _ :&: _ -> iRecordMod e' []
             _ -> e'
-      case project (matchChainToExpr cs') :: Maybe (Match SimplePatSig SimplePat (Fix g) EXPR) of
+      case project (matchChainToExpr rcs') :: Maybe (Match SimplePatSig SimplePat (Fix g) EXPR) of
        Just (Match _ cs') -> return $ iMatch er cs'
        Nothing -> Fail.fail "impossible"
+
+class RHSCount f g m where
+  rhsCountAlg :: Alg f (Compose m (Fix g))
+
+$(derive [liftSum] [''RHSCount])
+
+instance {-# OVERLAPPABLE #-} (Monad m, HTraversable f, f :<: g) => RHSCount f g m where
+  rhsCountAlg = Compose . fmap inject . hmapM getCompose
+
+instance {-# OVERLAPPABLE #-} (Fail.MonadFail m, 
+  Update ("RHSOccur" :- Map.Map MatchId Int) ts' HList,
+  MonadState (HList ts') m, RHS MatchId :<: g) => RHSCount (RHS MatchId) g m where
+  rhsCountAlg (RHS i e) = Compose $ do
+    e' <- getCompose e
+    MS.modify (HL.modify @"RHSOccur" @(Map.Map MatchId Int) (Map.adjust (+ 1) i))
+    return $ iRHS i e'
 
 {-
 matchString1 :: String

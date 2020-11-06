@@ -30,6 +30,7 @@ dependencies:
 - data-fix
 - compdata
 - transformers
+- ordered-containers
 
 library:
   source-dirs: src

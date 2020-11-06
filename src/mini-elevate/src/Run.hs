@@ -28,6 +28,7 @@ import Text.RawString.QQ
 import qualified Control.Monad.Fail as Fail
 import System.IO
 import Print
+import Control.Arrow
 
 type ParsedSig = ExprSig
 
@@ -57,13 +58,22 @@ run s = do
           rCxt = Field nameCounter :| HNil
           sCxt :: HList '["MatchCounter" :- Int, "RHSOccur" :- Map.Map MatchId Int]
           sCxt = Field 0 :| Field Map.empty :| HNil
-      elab <- liftIO $ (flip evalStateT sCxt $ flip runReaderT rCxt $ 
-              getCompose (cata patElabAlg typeDefSubst) :: IO (Fix ElabSig EXPR))
+      (elab, rhsOccur) <- liftIO $ (fmap (second (HL.select @"RHSOccur" @(Map.Map MatchId Int))) $
+        flip runStateT sCxt $ flip runReaderT rCxt $
+        getCompose (cata patElabAlg typeDefSubst) :: IO (Fix ElabSig EXPR, Map.Map MatchId Int))
+      let sCxt :: HList '["RHSOccur" :- Map.Map MatchId Int]
+          sCxt = Field (Map.map (const 0) rhsOccur) :| HNil
+      (elab, rhsOccur) <- liftIO $ (fmap (second (HL.select @"RHSOccur" @(Map.Map MatchId Int))) $
+        flip runStateT sCxt $ getCompose (cata rhsCountAlg elab) :: IO (Fix ElabSig EXPR, Map.Map MatchId Int))
       (liftIO . putStrLn) =<< flip evalStateT Nothing (unK $ cata printAlg elab)
+      liftIO $ print rhsOccur
       env <- get
-      let cxt :: HList '["NameCounter" :- IORef Int, "TypeEnv" :- TypeEnv]
-          cxt = Field nameCounter :| Field env :| HNil
-      ((r, cs), newEnv) <- liftIO $ (flip runStateT env (runWriterT (flip runReaderT cxt (getCompose (cata inferAlg elab)))) :: IO ((Fix InferSig EXPR, [Constraint]), TypeEnv))
+      let cxt :: HList '["NameCounter" :- IORef Int, "TypeEnv" :- TypeEnv, "RunInfer" :- Bool, "ErrMsg" :- String]
+          cxt = Field nameCounter :| Field env :| Field True :| Field "" :| HNil
+          stat :: HList '["RHSOccur" :- Map.Map MatchId Int, "REPLEnv" :- TypeEnv]
+          stat = Field rhsOccur :| Field env :| HNil
+      ((r, cs), newEnv) <- liftIO $ (fmap (second (HL.select @"REPLEnv" @TypeEnv)) $
+        flip runStateT stat (runWriterT (flip runReaderT cxt (getCompose (cata inferAlg elab)))) :: IO ((Fix InferSig EXPR, [Constraint]), TypeEnv))
       flip runReaderT cxt (runSolver cs)
       typeStr <- showTypeRep True (getType r)
       liftIO $ putStrLn ("type: " ++ typeStr ++ "\n")
