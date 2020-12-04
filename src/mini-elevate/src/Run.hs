@@ -29,6 +29,8 @@ import qualified Control.Monad.Fail as Fail
 import System.IO
 import Print
 import Control.Arrow
+import Subst
+import Eval
 
 type ParsedSig = ExprSig
 
@@ -42,7 +44,8 @@ type ElabSig = Expr :+: FunDef PresSig TypeSig :+: RecDef PresSig TypeSig :+: Re
 
 type InferSig = (Expr :&: TypeRep) :+: (FunDef PresSig TypeSig :&: TypeRep) :+: (RecDef PresSig TypeSig :&: TypeRep) :+: (RecordOps :&: TypeRep) :+: (LabelExpr LabelAsFun :&: TypeRep) :+: (Match (Pat :+: AppPat) SimplePat :&: TypeRep) :+: (RHS MatchId :&: TypeRep)
 
-run :: (MonadState TypeEnv m, MonadIO m, Fail.MonadFail m) => String -> m ()
+run :: (Update ("TypeEnv" :- TypeEnv) ts HList, Update ("EvalEnv" :- Subst (Fix ElabSig EXPR)) ts HList, 
+  MonadState (HList ts) m, MonadIO m, Fail.MonadFail m) => String -> m ()
 run s = do
   nameCounter <- liftIO $ newIORef 0
   case parse program "" s of
@@ -65,9 +68,11 @@ run s = do
           sCxt = Field (Map.map (const 0) rhsOccur) :| HNil
       (elab, rhsOccur) <- liftIO $ (fmap (second (HL.select @"RHSOccur" @(Map.Map MatchId Int))) $
         flip runStateT sCxt $ getCompose (cata rhsCountAlg elab) :: IO (Fix ElabSig EXPR, Map.Map MatchId Int))
+      liftIO $ putStrLn "After pattern elaboration:"
       (liftIO . putStrLn) =<< flip evalStateT Nothing (unK $ cata printAlg elab)
-      liftIO $ print rhsOccur
-      env <- get
+      liftIO $ putStrLn ""
+      -- liftIO $ print rhsOccur
+      env <- select @"TypeEnv" @TypeEnv <$> get
       let cxt :: HList '["NameCounter" :- IORef Int, "TypeEnv" :- TypeEnv, "RunInfer" :- Bool, "ErrMsg" :- String]
           cxt = Field nameCounter :| Field env :| Field True :| Field "" :| HNil
           stat :: HList '["RHSOccur" :- Map.Map MatchId Int, "REPLEnv" :- TypeEnv]
@@ -75,22 +80,38 @@ run s = do
       ((r, cs), newEnv) <- liftIO $ (fmap (second (HL.select @"REPLEnv" @TypeEnv)) $
         flip runStateT stat (runWriterT (flip runReaderT cxt (getCompose (cata inferAlg elab)))) :: IO ((Fix InferSig EXPR, [Constraint]), TypeEnv))
       flip runReaderT cxt (runSolver cs)
+      liftIO $ putStrLn "After type inference:"
+      (liftIO . putStrLn) =<< flip evalStateT Nothing (unK $ cata (liftA printAlg) r)
       typeStr <- showTypeRep True (getType r)
       liftIO $ putStrLn ("type: " ++ typeStr ++ "\n")
-      put newEnv
+      MS.modify (HL.modify @"TypeEnv" @TypeEnv (const newEnv))
+      evalEnv <- select @"EvalEnv" @(Subst (Fix ElabSig EXPR)) <$> get
+      let cxt :: HList '["Subst" :- Subst (Fix ElabSig EXPR), "RunEval" :- Bool]
+          cxt = Field evalEnv :| Field True :| HNil
+          stat :: HList '["REPLEnv" :- Subst (Fix ElabSig EXPR)]
+          stat = Field evalEnv :| HNil
+      (v, newEvalEnv) <- liftIO $ (fmap (second (HL.select @"REPLEnv" @(Subst (Fix ElabSig EXPR)))) $
+        flip runStateT stat (flip runReaderT cxt (getCompose (cata (liftA evalAlg) r))) :: IO (Fix ElabSig EXPR, Subst (Fix ElabSig EXPR)))
+      liftIO $ putStrLn "After evaluation:"
+      (liftIO . putStrLn) =<< flip evalStateT Nothing (unK $ cata printAlg v)
+      MS.modify (HL.modify @"EvalEnv" @(Subst (Fix ElabSig EXPR)) (const newEvalEnv))
+
 
 readProg :: IO String
 readProg = do
   s <- getLine
   if s == "" then return "" else ((s ++ "\n") ++) <$> readProg
 
-repl :: (MonadState TypeEnv m, MonadIO m, Fail.MonadFail m) => m ()
+repl :: (Update ("TypeEnv" :- TypeEnv) ts HList, Update ("EvalEnv" :- Subst (Fix ElabSig EXPR)) ts HList, 
+  MonadState (HList ts) m, MonadIO m, Fail.MonadFail m) => m ()
 repl = do
   prog <- liftIO $ putStr "> " >> hFlush stdout >> readProg
   if prog == ":q\n" then return () else run prog >> repl
 
 runREPL :: IO ()
-runREPL = flip evalStateT (TypeEnv Map.empty) repl
+runREPL = flip evalStateT stat repl
+  where stat :: HList '["TypeEnv" :- TypeEnv, "EvalEnv" :- Subst (Fix ElabSig EXPR)]
+        stat = Field (TypeEnv Map.empty) :| Field Map.empty :| HNil
 
 elevate :: String
 elevate = [r|

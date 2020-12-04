@@ -124,6 +124,10 @@ data Match :: ((* -> *) -> * -> *) -> * -> (* -> *) -> * -> * where
 data RHS :: * -> (* -> *) -> * -> * where
   RHS :: i -> e EXPR -> RHS i e EXPR
 
+type ComplexPatSig = RecordPat :+: AppPat :+: Pat :+: MatchAllPat
+
+type SimplePatSig = Pat :+: AppPat
+
 $(derive [makeHFunctor, makeHFoldable, makeHTraversable] 
          [''Pres, ''UnknownPres, 
           ''Row, ''Type, ''UnknownType, ''RecVariantType,

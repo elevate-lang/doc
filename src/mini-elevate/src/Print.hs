@@ -124,4 +124,4 @@ instance (MonadState (Maybe Bool) m, HTraversable p, Print p m) => Print (Match 
     return $ if pos == Nothing then str else parens str
 
 instance (Monad m, Show i) => Print (RHS i) m where
-  printAlg (RHS i e) = K $ ((show i ++ " ") ++) <$> unK e
+  printAlg (RHS i e) = K $ {-((show i ++ " ") ++) <$>-} unK e
