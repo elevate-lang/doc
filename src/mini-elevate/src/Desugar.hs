@@ -75,6 +75,11 @@ instance {-# OVERLAPPABLE #-} (MonadState (Set.Set Id) m, Expr :<: g) => GenRecD
   genRecDefAlg (IdExpr i) = Compose $ do
     modify (Set.delete i)
     return (iIdExpr i)
+  genRecDefAlg (LamExpr param body) = Compose $ do
+    isShadowing <- gets (Set.member param)
+    body' <- getCompose body
+    when isShadowing (modify $ Set.insert param)
+    return $ iLamExpr param body'
   genRecDefAlg e = Compose $ fmap inject (hmapM getCompose e)
 
 instance {-# OVERLAPPABLE #-} (MonadState (Set.Set Id) m, FunDef p t :<: g, RecDef p t :<: g) => GenRecDef (FunDef p t) g m where
@@ -82,14 +87,10 @@ instance {-# OVERLAPPABLE #-} (MonadState (Set.Set Id) m, FunDef p t :<: g, RecD
     isShadowing <- gets (Set.member i)
     modify (Set.insert i)
     f' <- getCompose f
-    isUsed <- not <$> gets (Set.member i)
+    isUsed <- gets (not . Set.member i)
     e' <- getCompose e
-    case isShadowing of
-      True -> modify (Set.insert i)
-      False -> modify (Set.delete i)
-    return $ case isUsed of
-      True -> iRecDef i c t f' e'
-      False -> iFunDef i c t f' e'
+    modify $ if isShadowing then Set.insert i else Set.delete i
+    return $ (if isUsed then iRecDef else iFunDef) i c t f' e'
 {-
 genRecDef :: Fix ExprSig EXPR -> Fix FullSig EXPR
 genRecDef = flip evalState (Set.empty) . getCompose . cata genRecDefAlg
